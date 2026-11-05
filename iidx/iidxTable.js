@@ -99,15 +99,35 @@ function gameVersion() {
   const m = location.pathname.match(/\/game\/2dx\/(\d+)\//);
   return m ? parseInt(m[1], 10) : DEFAULT_VERSION;
 }
-function pageURL(level, offset) {
-  return `https://p.eagate.573.jp/game/2dx/${gameVersion()}/djdata/music/difficulty.html?difficult=${level - 1}&style=0&disp=1&offset=${offset}`;
+function baseURL() {
+  return `https://p.eagate.573.jp/game/2dx/${gameVersion()}/djdata/music/difficulty.html`;
 }
-async function fetchDoc(url) {
-  const res = await fetch(url, { credentials: "include" });
+// 1ページ目は公式サイトの「楽曲閲覧」ボタンと同じ送り方 (POST) で開く
+async function fetchDoc(url, form) {
+  const opt = { credentials: "include" };
+  if (form) {
+    opt.method = "POST";
+    opt.headers = { "Content-Type": "application/x-www-form-urlencoded" };
+    opt.body = new URLSearchParams(form).toString();
+  }
+  const res = await fetch(url, opt);
+  if (!res.ok) throw new Error(`公式サイトからエラーが返されました (HTTP ${res.status})`);
   const buf = await res.arrayBuffer();
   const ct = (res.headers.get("Content-Type") || "").toLowerCase();
-  let text = new TextDecoder(ct.includes("shift_jis") || ct.includes("sjis") ? "shift_jis" : "utf-8").decode(buf);
+  const text = new TextDecoder(ct.includes("shift_jis") || ct.includes("sjis") ? "shift_jis" : "utf-8").decode(buf);
   return new DOMParser().parseFromString(text, "text/html");
+}
+// 読み込めなかったページが何だったのかを、利用者に分かる言葉で説明する
+function explainPage(doc) {
+  const title = (doc.querySelector("#page-title")?.textContent || doc.title || "").trim().replace(/\s+/g, " ");
+  const body = doc.body ? doc.body.textContent : "";
+  if (/ログイン|login/i.test(body) && !doc.querySelector("#log-on .on-name")) {
+    return "公式サイトにログインしていないようです。ログインしてから、もう一度ブックマークを開いてください。";
+  }
+  if (/ベーシックコース|有料|加入/.test(body) && !doc.querySelector(".series-difficulty")) {
+    return "e-amusement ベーシックコースのページが表示されました。加入状況を確認してください。";
+  }
+  return `楽曲データのページを読み取れませんでした（表示されたページ: ${title || "不明"}）。`;
 }
 function parseDoc(doc) {
   const table = doc.querySelector(".series-difficulty table");
@@ -129,26 +149,39 @@ function parseDoc(doc) {
       lamp: lm ? parseInt(lm[1], 10) : 0,
     });
   }
-  const hasNext = !!doc.querySelector(".navi-next a");
-  return { rows, hasNext };
+  const next = doc.querySelector(".navi-next a");
+  const hasNext = !!next;
+  const nextURL = next ? next.getAttribute("href") : null;
+  // 表の見出し (例: "SP LEVEL 12") から、実際に表示されたLvを読む
+  const hm = (table.querySelector("th")?.textContent || "").match(/(SP|DP)\s*LEVEL\s*(\d+)/i);
+  return { rows, hasNext, nextURL, style: hm ? hm[1].toUpperCase() : "", level: hm ? parseInt(hm[2], 10) : 0 };
 }
 async function fetchLevel(level, progress) {
   const all = [];
+  let doc = await fetchDoc(baseURL(), { difficult: String(level - 1), style: "0", disp: "1" });
   for (let page = 0; page < 40; page++) {
-    const doc = await fetchDoc(pageURL(level, page * 50));
     const r = parseDoc(doc);
     if (!r) {
-      if (page === 0) throw new Error("プレイデータを読み取れませんでした。IIDXの公式サイトにログインした状態で実行してください。");
+      if (page === 0) throw new Error(explainPage(doc));
       break;
+    }
+    if (page === 0 && r.level && (r.level !== level || r.style !== "SP")) {
+      throw new Error(`☆${level} のページを開こうとしましたが、${r.style} ☆${r.level} のページが表示されました。`);
     }
     all.push(...r.rows);
     progress(level, page + 1, r.hasNext);
     if (!r.hasNext) break;
     await sleep(FETCH_BATCH_INTERVAL_MS);
+    // 次のページは、公式サイトの「NEXT」リンクのアドレスをそのまま使う
+    const nextURL = r.nextURL ? new URL(r.nextURL, baseURL()).href : `${baseURL()}?difficult=${level - 1}&style=0&disp=1&offset=${(page + 1) * 50}`;
+    doc = await fetchDoc(nextURL);
   }
   return all;
 }
 async function updatePlayData(levels, mock, progress) {
+  if (!mock && location.hostname !== "p.eagate.573.jp") {
+    throw new Error(`IIDXの公式サイト（p.eagate.573.jp）のページを開いた状態でブックマークを実行してください。\n今開いているページ: ${location.hostname}`);
+  }
   const store = loadPlayData() || { levels: {}, timestamps: {} };
   for (const lv of levels) {
     store.levels[lv] = mock ? mock(lv) : await fetchLevel(lv, progress);
