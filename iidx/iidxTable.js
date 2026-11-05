@@ -492,6 +492,13 @@ button{font-family:inherit}
 .card-chips i{width:8px;height:8px;border-radius:2px;display:inline-block}
 .grp.shut .glabel .in{position:static}
 .glabel .fold{font-size:10px;opacity:.9}
+/* 開いている枠の「閉じる」ボタン (枠の上と下) */
+.openbox{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.openhead{display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:10px;padding:5px 6px 5px 11px;font-size:12.5px;font-weight:800;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.openhead b{font-size:16px;color:var(--accent)}
+.openfoot{display:flex;justify-content:center;margin-top:4px}
+.closebtn{border:0;font-size:12px;font-weight:800;color:var(--ink);background:#e3e1dc;border-radius:999px;padding:5px 14px;white-space:nowrap}
+.openfoot .closebtn{padding:7px 26px}
 .allbar{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
 .allbar button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;color:var(--sub)}
 .allbar + .grp{margin-top:8px}
@@ -658,7 +665,11 @@ function render(state) {
       <div class="glabel${g.kojin ? " kojin" : ""}" data-toggle="1" style="background-color:${color}"><div class="in">
         ${g.kojin ? `<span class="k">個人差</span>` : ""}<span class="n${long ? " long" : ""}">${esc(g.name)}</span><small>${gDone}/${g.charts.length}</small>${open ? `<span class="fold">▲</span>` : ""}</div></div>
       ${open
-        ? `<div class="cells">${shown.length ? shown.map((c) => cellHTML(c, goal)).join("") : `<div class="empty">該当する譜面はありません</div>`}</div>`
+        ? `<div class="openbox">
+            <div class="openhead"><span>達成 <b>${gDone}</b> / ${g.charts.length}</span><button class="closebtn" data-toggle="1">閉じる ▴</button></div>
+            <div class="cells">${shown.length ? shown.map((c) => cellHTML(c, goal)).join("") : `<div class="empty">該当する譜面はありません</div>`}</div>
+            ${shown.length > 6 ? `<div class="openfoot"><button class="closebtn" data-toggle="1">閉じる ▴</button></div>` : ""}
+          </div>`
         : cardHTML(g, gDone, shown.length)}
     </section>`;
   }).join("");
@@ -719,6 +730,12 @@ function render(state) {
     const key = h.closest("section").dataset.key;
     settings.opened[key] = !settings.opened[key];
     rerender();
+    // 閉じたとき、その枠が画面の上に隠れていたら枠の位置まで戻す (下の「閉じる」を押した場合など)
+    if (!settings.opened[key]) {
+      const sec = Array.from(document.querySelectorAll("section[data-key]")).find((s) => s.dataset.key === key);
+      const t = document.querySelector(".top");
+      if (sec && t) { const y = sec.getBoundingClientRect().top - t.offsetHeight - 8; if (y < 0) window.scrollBy(0, y); }
+    }
   }));
   // すべて開く / すべて閉じる (表示中の表の枠が対象)
   document.querySelectorAll("[data-all]").forEach((b) => b.addEventListener("click", () => {
