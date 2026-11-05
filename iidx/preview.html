@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>preview</title></head>
+<body>
+<!-- 動作確認用: 公式サイトにアクセスせず、ダミーのプレイデータで iidxTable.js を表示する -->
+<script type="module">
+  const data = await (await fetch("tables.json")).json();
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const DJ = ["AAA", "AA", "A", "B", "C", "D", "E", "F"];
+  // ダミーデータ: 難易度表に載っている譜面に乱数でランプを付ける (☆が高いほど未プレイ・未クリアが多め)
+  const mock = (lv) => {
+    const seen = new Set(), rows = [];
+    for (const t of data.tables.filter((t) => t.level === lv)) for (const g of t.groups) for (const [title, chart] of g.charts) {
+      const k = title + chart; if (seen.has(k) || rnd() < 0.01) continue; seen.add(k);
+      const x = rnd() + (lv - 9) * 0.06;
+      const lamp = x < 0.12 ? 7 : x < 0.2 ? 6 : x < 0.42 ? 5 : x < 0.62 ? 4 : x < 0.72 ? 3 : x < 0.78 ? 2 : x < 0.9 ? 1 : 0;
+      rows.push({ title, chart: chart || "A", dj: lamp ? DJ[Math.floor(rnd() * 5)] : "", score: lamp ? Math.floor(1000 + rnd() * 2500) : 0, lamp });
+    }
+    return rows;
+  };
+  localStorage.removeItem("iidx_playdata");
+  const m = await import("./iidxTable.js?" + Date.now());
+  m.default({ mock });
+</script>
+</body>
+</html>
