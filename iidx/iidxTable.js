@@ -631,11 +631,15 @@ function render(state) {
     </section>`;
   }).join("");
 
-  const missing = all.filter((c) => c.unmatched);
-  const missHTML = missing.length
-    ? `<details class="miss"><summary>公式データに見つからなかった譜面 (${missing.length})</summary>
-        <div style="margin-top:6px">表では NO PLAY として表示しています。プレイ済みなのにここに出ている譜面は、難易度表と公式サイトで曲名の書き方が違う譜面です。</div>
-        <ul>${missing.map((c) => `<li>${esc(c.t)} <span style="color:#7f838d">${c.chart ? CHART_NAME[c.chart] : ""}</span></li>`).join("")}</ul></details>`
+  // 公式サイトにはプレイ記録のある譜面しか載らないので、表側で見つからない譜面の多くは「まだプレイしていない譜面」。
+  // そこで逆向きに、「公式データにあるのに表のどの譜面とも結びつかなかった譜面」を一覧にする。
+  // ここに出るのは、曲名の書き方が違う譜面か、この難易度表に載っていない譜面だけ
+  const used = new Set(all.map((c) => c.row));
+  const orphans = noRecord || !played ? [] : played.filter((r) => !used.has(r) && /^[NHAL]$/.test(r.chart));
+  const missHTML = orphans.length
+    ? `<details class="miss"><summary>表と結びつかなかった公式データ (${orphans.length})</summary>
+        <div style="margin-top:6px">公式サイトにプレイ記録があるのに、この難易度表のどの譜面とも結びつかなかった譜面です。曲名の書き方が違うか、この表に載っていない譜面です。</div>
+        <ul>${orphans.map((r) => `<li>${esc(r.title)} <span style="color:#7f838d">${CHART_NAME[r.chart] || ""} / ${LAMPS[r.lamp].short}</span></li>`).join("")}</ul></details>`
     : "";
 
   document.body.innerHTML = `
