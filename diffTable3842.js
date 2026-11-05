@@ -434,6 +434,18 @@ body.pt{background:var(--bg);background-image:none}
 .pt-view button:first-child{border-radius:7px 0 0 7px}
 .pt-view button:last-child{border-radius:0 7px 7px 0;border-left:0}
 .pt-view button.on{background:var(--ink);border-color:var(--ink)}
+.pt-row2{display:flex;justify-content:center;gap:10px;margin-top:6px}
+.pt-row2 .pt-view{margin-top:0}
+/* 譜面の種類: H = 黄色、EX = 赤。どのバナーの色の上でも読めるよう、白い縁と影を付ける */
+.pt-type,.bn-type{background:#ffd21f;color:#3b2c00;border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.35)}
+.pt-type.EX,.bn-type.EX{background:#e5202e;color:#fff}
+.pt-type.N,.bn-type.N{background:#3d8fe0;color:#fff}
+.bn-type{font-size:9px;line-height:13px;padding:0 4px;border-radius:4px;top:2px;right:2px}
+.bn-cat{top:17px;border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.35)}
+/* 未プレイの曲はバナーの背景だけを薄くし、H/EXの表示や文字は薄くしない */
+.bn.l-noplay .bn-banner,.bn.l-nodata .bn-banner{filter:none}
+.bn.l-noplay .bn-banner::after,.bn.l-nodata .bn-banner::after{background:rgba(242,240,236,.6)}
+.bn-genre{z-index:1}
 .hero{margin:10px 0 0;padding:12px 14px;background:var(--card);border:0;border-radius:16px;box-shadow:0 1px 3px rgba(38,43,58,.06)}
 .hero-row{align-items:center}
 .hero-lv{color:var(--ink);text-shadow:none;display:flex;align-items:baseline;gap:2px;line-height:1}
@@ -648,7 +660,12 @@ function render(state) {
   const rows = matchLevel(table[lv] || [], store?.levels?.[lv]);
   const normal = rows.filter((r) => !r.soflan);
   const soflan = rows.filter((r) => r.soflan);
-  const catRank = (c) => CATEGORIES.indexOf(c);
+  // 並び順: 難しい順 (詐称→逆詐称) / 簡単順 (逆詐称→詐称)。
+  // 入れ替えるのは枠の順番だけで、同じ枠の中の曲順はCSVのまま。個人差・未評価・ソフランは常に後ろ
+  const easyFirst = settings.order === "easy";
+  const MAIN = ["詐称", "強", "中", "弱", "逆詐称"];
+  const catOrder = [...(easyFirst ? [...MAIN].reverse() : MAIN), ...CATEGORIES.filter((c) => !MAIN.includes(c))];
+  const catRank = (c) => catOrder.indexOf(c);
   const byDifficulty = (a, b) => catRank(a.category) - catRank(b.category) || a.index - b.index;
   normal.sort(byDifficulty);
   soflan.sort(byDifficulty);
@@ -656,7 +673,7 @@ function render(state) {
   const view = settings.view === "compact" ? "compact" : "banner";
   const gfn = view === "banner" ? bannerGroupHTML : groupHTML;
   let groups = "";
-  for (const c of CATEGORIES) {
+  for (const c of catOrder) {
     const g = normal.filter((r) => r.category === c);
     if (g.length) groups += gfn(`${lv}-${c}`, c, g, settings.filter, settings, false);
   }
@@ -678,9 +695,15 @@ function render(state) {
         ${[["all", "すべて"], ["cleared", "クリア済み"], ["notclear", "未クリア"], ["noplay", "未プレイ"]]
           .map(([k, t]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${t}</button>`).join("")}
       </div>
-      <div class="pt-view">
-        <button data-v="banner" class="${view === "banner" ? "on" : ""}">バナー</button>
-        <button data-v="compact" class="${view === "compact" ? "on" : ""}">コンパクト</button>
+      <div class="pt-row2">
+        <div class="pt-view">
+          <button data-v="banner" class="${view === "banner" ? "on" : ""}">バナー</button>
+          <button data-v="compact" class="${view === "compact" ? "on" : ""}">コンパクト</button>
+        </div>
+        <div class="pt-view">
+          <button data-o="hard" class="${!easyFirst ? "on" : ""}">難しい順</button>
+          <button data-o="easy" class="${easyFirst ? "on" : ""}">簡単順</button>
+        </div>
       </div>
       ${heroHTML(lv, rows, store)}
     </div>
@@ -710,9 +733,16 @@ function render(state) {
       render(state);
     })
   );
-  document.querySelectorAll(".pt-view button").forEach((b) =>
+  document.querySelectorAll("[data-v]").forEach((b) =>
     b.addEventListener("click", () => {
       settings.view = b.dataset.v;
+      saveSettings(settings);
+      render(state);
+    })
+  );
+  document.querySelectorAll("[data-o]").forEach((b) =>
+    b.addEventListener("click", () => {
+      settings.order = b.dataset.o;
       saveSettings(settings);
       render(state);
     })
