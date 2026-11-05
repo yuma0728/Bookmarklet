@@ -129,40 +129,87 @@ function explainPage(doc) {
   }
   return `楽曲データのページを読み取れませんでした（表示されたページ: ${title || "不明"}）。`;
 }
+// 曲一覧の読み取り。PC版・スマホ版でページの作りが違っても読めるよう、
+// 「曲の詳細ページへのリンク」を目印に1曲ずつ探し、その周りから譜面・ランプ・スコアを読む
+function songBox(a) {
+  // リンクから親をたどり、クリアランプ画像を含む最小のまとまりを1曲分とみなす
+  let el = a.parentElement;
+  for (let i = 0; i < 6 && el; i++, el = el.parentElement) {
+    if (el.querySelector('img[src*="clflg"]')) {
+      return el.querySelectorAll('a[href*="music_info"]').length <= 1 ? el : a.closest("tr, li") || el;
+    }
+  }
+  return a.closest("tr, li") || a.parentElement;
+}
 function parseDoc(doc) {
-  const table = doc.querySelector(".series-difficulty table");
-  if (!table) return null;
+  const links = Array.from(doc.querySelectorAll('a[href*="music_info"]'));
+  if (!links.length) return null;
   const rows = [];
-  for (const tr of table.querySelectorAll("tr")) {
-    const td = tr.querySelectorAll("td");
-    const a = td[0] && td[0].querySelector("a");
-    if (!a || td.length < 5) continue;
-    const chart = (td[1].textContent || "").trim().toUpperCase();
-    const djm = (td[2].querySelector("img")?.getAttribute("src") || "").match(/\/([A-F]{1,3}|---)\.gif/);
-    const score = parseInt((td[3].textContent || "").trim(), 10) || 0;
-    const lm = (td[4].querySelector("img")?.getAttribute("src") || "").match(/clflg(\d)/);
+  for (const a of links) {
+    const box = songBox(a);
+    const title = a.textContent.trim();
+    if (!title) continue;
+    const rest = (box.textContent || "").replace(a.textContent, " "); // 曲名中の単語を譜面名と誤認しないよう除く
+    const cm = rest.match(/LEGGENDARIA|ANOTHER|HYPER|NORMAL|BEGINNER/i);
+    const imgs = Array.from(box.querySelectorAll("img")).map((i) => i.getAttribute("src") || "");
+    const lamp = imgs.map((s) => s.match(/clflg(\d)/)).find(Boolean);
+    const dj = imgs.map((s) => s.match(/\/(AAA|AA|A|B|C|D|E|F|---)\.(?:gif|png)/i)).find(Boolean);
+    const sm = rest.match(/(\d+)\s*\(\s*\d+\s*\/\s*\d+\s*\)/) || rest.match(/(?:^|\s)(\d{1,4})(?:\s|$)/);
     rows.push({
-      title: a.textContent.trim(),
-      chart: chart.charAt(0), // N / H / A / L / B
-      dj: djm && djm[1] !== "---" ? djm[1] : "",
-      score,
-      lamp: lm ? parseInt(lm[1], 10) : 0,
+      title,
+      chart: cm ? cm[0].charAt(0).toUpperCase() : "", // N / H / A / L / B
+      dj: dj && dj[1] !== "---" ? dj[1].toUpperCase() : "",
+      score: sm ? parseInt(sm[1], 10) : 0,
+      lamp: lamp ? parseInt(lamp[1], 10) : 0,
     });
   }
-  const next = doc.querySelector(".navi-next a");
-  const hasNext = !!next;
-  const nextURL = next ? next.getAttribute("href") : null;
-  // 表の見出し (例: "SP LEVEL 12") から、実際に表示されたLvを読む
-  const hm = (table.querySelector("th")?.textContent || "").match(/(SP|DP)\s*LEVEL\s*(\d+)/i);
-  return { rows, hasNext, nextURL, style: hm ? hm[1].toUpperCase() : "", level: hm ? parseInt(hm[2], 10) : 0 };
+  // 次のページ: offset= を含み「NEXT」「▶」「次」と書かれたリンク
+  const next = Array.from(doc.querySelectorAll('a[href*="offset="]')).find((x) => /NEXT|▶|次/i.test(x.textContent));
+  // ページ内の見出し (例: "SP LEVEL 12") から、実際に表示されたLvを読む
+  const hm = ((doc.querySelector("#base") || doc.body)?.textContent || "").match(/(SP|DP)\s*LEVEL\s*(\d+)/i);
+  return { rows, hasNext: !!next, nextURL: next ? next.getAttribute("href") : null, style: hm ? hm[1].toUpperCase() : "", level: hm ? parseInt(hm[2], 10) : 0 };
+}
+
+// 読み取りに失敗したときの診断情報 (DJ NAMEなどの個人情報は含めない)
+function pageStats(doc) {
+  const q = (s) => doc.querySelectorAll(s).length;
+  return `曲リンク${q('a[href*="music_info"]')} / ランプ画像${q('img[src*="clflg"]')} / table${q("table")} / form${q("form")}`;
+}
+function diagnosis(doc) {
+  const out = [];
+  const L = window.__dxLaunch;
+  if (L) {
+    const ld = new DOMParser().parseFromString(L.html, "text/html");
+    out.push(`[開いていたページ] ${L.path}`);
+    out.push(`  ${pageStats(ld)}`);
+    const a = ld.querySelector('a[href*="music_info"]');
+    if (a) out.push(`  1曲目: ${songBox(a).outerHTML.replace(/\s+/g, " ").slice(0, 900)}`);
+  }
+  if (doc) {
+    out.push(`[ツールが読み込んだページ] ${pageStats(doc)}`);
+    const main = (doc.querySelector("#base-inner") || doc.querySelector("#base") || doc.body)?.textContent || "";
+    out.push(`  本文: ${main.replace(/\s+/g, " ").trim().slice(0, 400)}`);
+  }
+  return out.join("\n");
+}
+class ReadError extends Error {
+  constructor(message, doc) {
+    super(message);
+    this.diag = diagnosis(doc);
+  }
 }
 async function fetchLevel(level, progress) {
   const all = [];
   let doc = await fetchDoc(baseURL(), { difficult: String(level - 1), style: "0", disp: "1" });
+  // POSTで曲が出なければ、NEXTリンクと同じ形式 (アドレス指定) でも試す
+  if (!parseDoc(doc)?.rows.length) {
+    await sleep(FETCH_BATCH_INTERVAL_MS);
+    doc = await fetchDoc(`${baseURL()}?difficult=${level - 1}&style=0&disp=1&offset=0`);
+  }
   for (let page = 0; page < 40; page++) {
     const r = parseDoc(doc);
-    if (!r) {
-      if (page === 0) throw new Error(explainPage(doc));
+    if (!r || !r.rows.length) {
+      if (page === 0) throw new ReadError(explainPage(doc), doc);
       break;
     }
     if (page === 0 && r.level && (r.level !== level || r.style !== "SP")) {
@@ -449,16 +496,31 @@ async function runUpdate(state, levels) {
     render(state);
   } catch (e) {
     console.error(e);
-    showMessage(`<span class="err">${esc(e.message)}</span>\n\n<button class="btn" onclick="location.reload()">ページを再読み込み</button>`);
+    const diag = e.diag
+      ? `\n\n<div style="text-align:left;font-size:12px">下の「診断情報」をコピーして、Claude に送ってください。</div>
+         <textarea id="diag" readonly style="width:100%;height:160px;font-size:10px;margin-top:6px">${esc(e.diag)}</textarea>
+         <button class="btn" id="copydiag" style="width:100%;margin-top:6px">診断情報をコピー</button>`
+      : "";
+    showMessage(`<span class="err">${esc(e.message)}</span>${diag}\n\n<button class="btn" onclick="location.reload()">ページを再読み込み</button>`);
+    const cb = document.getElementById("copydiag");
+    if (cb) cb.addEventListener("click", async () => {
+      const ta = document.getElementById("diag");
+      try { await navigator.clipboard.writeText(ta.value); } catch (x) { ta.select(); document.execCommand("copy"); }
+      cb.textContent = "コピーしました";
+    });
   }
 }
 
 // 動作確認用に一部の関数を公開
-export { parseDoc, makeIndex, findRow };
+export { parseDoc, makeIndex, findRow, diagnosis };
 
 // options.mock: 公式サイトを使わずに動作確認するためのダミーデータ生成関数 (preview.html用)
 export default async (options = {}) => {
   try {
+    // 診断用に、ブックマークを開いた時点のページを控えておく (画面を書き換える前に)
+    try {
+      window.__dxLaunch = { path: location.pathname + location.search, html: document.documentElement.outerHTML };
+    } catch (e) {}
     setupPage();
     showMessage("難易度表を読み込み中・・・");
     const res = await fetch(BASE_URL + "/tables.json?t=" + Date.now(), { cache: "no-store" });
