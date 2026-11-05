@@ -424,7 +424,13 @@ button{font-family:inherit}
 .hero-lv small{font-size:16px;color:var(--sub)}
 .hero-lv b{font-size:42px}
 .hero-txt{min-width:0}
-.hero-p{font-size:12px;font-weight:800;color:var(--sub)}
+.hero-lv{display:flex;flex-direction:column;align-items:center}
+.hero-p{font-size:12px;font-weight:800;color:var(--sub);margin-top:3px;letter-spacing:.02em}
+.sorter{display:flex;justify-content:center;margin-top:6px}
+.sorter button{border:1px solid var(--line);background:#fff;padding:4px 14px;font-size:12px;color:var(--sub)}
+.sorter button:first-child{border-radius:7px 0 0 7px}
+.sorter button:last-child{border-radius:0 7px 7px 0;border-left:0}
+.sorter button.on{background:var(--ink);border-color:var(--ink);color:#fff}
 .hero-c{font-size:13px;font-weight:700;margin-top:2px}
 .hero-c b{font-size:22px;color:var(--accent)}
 .lamps{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}
@@ -552,13 +558,31 @@ function render(state) {
     ? `<div class="bar">${order.filter((i) => counts[i] > 0).map((i) => `<i style="width:${(counts[i] / all.length) * 100}%;background:${LAMPS[i].color}"></i>`).join("")}</div>`
     : "";
 
-  const mainCount = groups.filter((g) => !/未分類|未定|超個人差/.test(g.name)).length;
+  // ランクの色は元の並び (難しい順) で決めておき、並び替えても同じランクは同じ色にする
+  const isOther = (n) => /未分類|未定|超個人差/.test(n);
+  const mainCount = groups.filter((g) => !isOther(g.name)).length;
   let gi = -1, prevName = null;
-  const f = settings.filter;
-  const groupsHTML = groups.map((g) => {
-    if (g.name !== prevName && !/未分類|未定|超個人差/.test(g.name)) gi++;
+  for (const g of groups) {
+    if (g.name !== prevName && !isOther(g.name)) gi++;
     prevName = g.name;
-    const color = groupColor(Math.max(0, gi), mainCount / 1.6, g.name);
+    g.color = groupColor(Math.max(0, gi), mainCount / 1.6, g.name);
+  }
+  // 並び順: 簡単順ならランクの順番だけ逆にする (同じランクの「地力」「個人差」は組のまま、ランク内の譜面順もそのまま)
+  // 未分類・未定・超個人差は常に最後
+  const easyFirst = settings.order === "easy";
+  let ordered = groups;
+  if (easyFirst) {
+    const blocks = [];
+    for (const g of groups.filter((g) => !isOther(g.name))) {
+      const b = blocks[blocks.length - 1];
+      if (b && b[0].name === g.name) b.push(g);
+      else blocks.push([g]);
+    }
+    ordered = [...blocks.reverse().flat(), ...groups.filter((g) => isOther(g.name))];
+  }
+  const f = settings.filter;
+  const groupsHTML = ordered.map((g) => {
+    const color = g.color;
     const key = `${purpose.id}-${lv}-${g.kojin ? "k" : ""}${g.name}`;
     const shown = g.charts.filter((c) => passFilter(c, f, goal));
     const gDone = g.charts.filter((c) => c.row && c.row.lamp >= goal).length;
@@ -583,11 +607,12 @@ function render(state) {
       <div class="seg" style="grid-template-columns:repeat(${PURPOSES.length},1fr)">${PURPOSES.map((p) => `<button data-p="${p.id}" class="${p.id === purpose.id ? "on" : ""}">${p.label}</button>`).join("")}</div>
       <div class="seg lv" style="grid-template-columns:repeat(${levels.length},1fr)">${levels.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">☆${l}</button>`).join("")}</div>
       <div class="chips">${[["all", "すべて"], ["done", "達成済み"], ["notdone", "未達成"], ["noplay", "未プレイ"]].map(([k, t]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${t}</button>`).join("")}</div>
+      <div class="sorter"><button data-o="hard" class="${!easyFirst ? "on" : ""}">難しい順</button><button data-o="easy" class="${easyFirst ? "on" : ""}">簡単順</button></div>
     </div>
     <div class="wrap">
       <div class="hero"><div class="hero-row">
-        <div class="hero-lv"><small>☆</small><b>${lv}</b></div>
-        <div class="hero-txt"><div class="hero-p">SP ${purpose.label} 難易度表</div>
+        <div class="hero-lv"><div><small>☆</small><b>${lv}</b></div><div class="hero-p">${purpose.label}</div></div>
+        <div class="hero-txt">
           <div class="hero-c">${played ? `${purpose.goalLabel} 達成 <b>${doneN}</b> / ${all.length}（${((doneN / all.length) * 100).toFixed(1)}%）` : "プレイデータ未取得"}</div></div></div>
         ${lampChips ? `<div class="lamps">${lampChips}</div>` : ""}${bar}
         ${played ? "" : `<div style="margin-top:8px;font-size:12.5px;color:#7f838d">☆${lv} のプレイデータがまだありません。下の「データを更新」を押してください。</div>`}
@@ -608,6 +633,7 @@ function render(state) {
   document.querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => { settings.purpose = b.dataset.p; rerender(); window.scrollTo(0, 0); }));
   document.querySelectorAll("[data-lv]").forEach((b) => b.addEventListener("click", () => { settings.level = +b.dataset.lv; rerender(); window.scrollTo(0, 0); }));
   document.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { settings.filter = b.dataset.f; rerender(); }));
+  document.querySelectorAll("[data-o]").forEach((b) => b.addEventListener("click", () => { settings.order = b.dataset.o; rerender(); }));
   document.querySelectorAll(".glabel").forEach((h) => h.addEventListener("click", () => {
     const sec = h.parentElement;
     sec.classList.toggle("closed");
