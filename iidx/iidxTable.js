@@ -477,9 +477,24 @@ button{font-family:inherit}
 .glabel small{font-size:9.5px;font-weight:800;writing-mode:vertical-rl;opacity:.95}
 .glabel.kojin{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 5px,transparent 5px 10px)}
 .cells{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:5px}
-.grp.closed .cells{display:block;font-size:12px;color:var(--sub);padding:10px 0}
-.grp.closed .cells > *{display:none}
-.grp.closed .cells::before{content:"タップで開く"}
+/* 閉じている枠のまとめカード */
+.card{flex:1;min-width:0;background:#fff;border-radius:12px;padding:9px 11px;box-shadow:0 1px 3px rgba(0,0,0,.07);cursor:pointer;display:flex;flex-direction:column;gap:6px}
+.card:active{transform:scale(.99)}
+.card-top{display:flex;align-items:center;gap:8px}
+.card-n{font-size:12.5px;font-weight:800}
+.card-n b{font-size:18px;color:var(--accent)}
+.card .hit{font-size:11px;font-weight:800;color:var(--sub);background:var(--bg);border-radius:6px;padding:1px 6px}
+.card-btn{margin-left:auto;font-size:12px;font-weight:800;color:#fff;background:var(--ink);border-radius:999px;padding:3px 10px;white-space:nowrap}
+.card-bar{display:flex;height:7px;border-radius:4px;overflow:hidden;background:#e8e5df}
+.card-bar i{display:block;height:100%}
+.card-chips{display:flex;flex-wrap:wrap;gap:3px 8px;font-size:10.5px;font-weight:700;color:var(--sub)}
+.card-chips span{display:inline-flex;align-items:center;gap:3px}
+.card-chips i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.grp.shut .glabel .in{position:static}
+.glabel .fold{font-size:10px;opacity:.9}
+.allbar{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
+.allbar button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;color:var(--sub)}
+.allbar + .grp{margin-top:8px}
 .cell{position:relative;display:flex;min-height:50px;border-radius:8px;overflow:hidden;background:var(--lbg);box-shadow:0 1px 2px rgba(0,0,0,.06)}
 .cell .lb{flex:none;width:6px;background:var(--lc)}
 .cell.l7 .lb{background:linear-gradient(#ff5e7e,#ffb347,#f9f871,#5ee28b,#4fb6ff,#a77bff)}
@@ -620,16 +635,31 @@ function render(state) {
     ordered = [...blocks.reverse().flat(), ...groups.filter((g) => isOther(g.name))];
   }
   const f = settings.filter;
+  // 閉じている枠に表示する「まとめカード」: 達成数・ランプの内訳・開くボタン
+  const cardHTML = (g, gDone, shownCount) => {
+    const cnt = Array(8).fill(0);
+    for (const c of g.charts) cnt[c.row ? c.row.lamp : 0]++;
+    const ids = order.filter((i) => cnt[i] > 0);
+    const n = g.charts.length;
+    return `<div class="card" data-open="1">
+      <div class="card-top"><span class="card-n">達成 <b>${gDone}</b> / ${n}</span>${f !== "all" ? `<span class="hit">該当 ${shownCount}譜面</span>` : ""}<span class="card-btn">開く ▾</span></div>
+      <div class="card-bar">${ids.map((i) => `<i style="width:${(cnt[i] / n) * 100}%;background:${LAMPS[i].color}"></i>`).join("")}</div>
+      <div class="card-chips">${played ? ids.map((i) => `<span><i style="background:${LAMPS[i].color}"></i>${LAMPS[i].short} ${cnt[i]}</span>`).join("") : "<span>プレイデータ未取得</span>"}</div></div>`;
+  };
+  settings.opened = settings.opened || {};
   const groupsHTML = ordered.map((g) => {
     const color = g.color;
     const key = `${purpose.id}-${lv}-${g.kojin ? "k" : ""}${g.name}`;
+    const open = !!settings.opened[key]; // 初期状態は閉じている
     const shown = g.charts.filter((c) => passFilter(c, f, goal));
     const gDone = g.charts.filter((c) => c.row && c.row.lamp >= goal).length;
     const long = g.name.length > 3;
-    return `<section class="grp${settings.collapsed[key] ? " closed" : ""}" data-key="${esc(key)}">
-      <div class="glabel${g.kojin ? " kojin" : ""}" style="background-color:${color}"><div class="in">
-        ${g.kojin ? `<span class="k">個人差</span>` : ""}<span class="n${long ? " long" : ""}">${esc(g.name)}</span><small>${gDone}/${g.charts.length}</small></div></div>
-      <div class="cells">${shown.length ? shown.map((c) => cellHTML(c, goal)).join("") : `<div class="empty">該当する譜面はありません</div>`}</div>
+    return `<section class="grp${open ? "" : " shut"}" data-key="${esc(key)}">
+      <div class="glabel${g.kojin ? " kojin" : ""}" data-toggle="1" style="background-color:${color}"><div class="in">
+        ${g.kojin ? `<span class="k">個人差</span>` : ""}<span class="n${long ? " long" : ""}">${esc(g.name)}</span><small>${gDone}/${g.charts.length}</small>${open ? `<span class="fold">▲</span>` : ""}</div></div>
+      ${open
+        ? `<div class="cells">${shown.length ? shown.map((c) => cellHTML(c, goal)).join("") : `<div class="empty">該当する譜面はありません</div>`}</div>`
+        : cardHTML(g, gDone, shown.length)}
     </section>`;
   }).join("");
 
@@ -667,6 +697,7 @@ function render(state) {
         ${played ? "" : `<div style="margin-top:8px;font-size:12.5px;color:#7f838d">☆${lv} のプレイデータがまだありません。下の「データを更新」を押してください。</div>`}
         ${noRecord ? `<div style="margin-top:8px;font-size:12.5px;color:#7f838d">公式サイトに ☆${lv} のプレイ記録がありません（すべて NO PLAY として表示しています）。</div>` : ""}
       </div>
+      <div class="allbar"><button data-all="open">すべて開く</button><button data-all="close">すべて閉じる</button></div>
       ${groupsHTML}
       ${missHTML}
     </div>
@@ -683,11 +714,16 @@ function render(state) {
   document.querySelectorAll("[data-lv]").forEach((b) => b.addEventListener("click", () => { settings.level = +b.dataset.lv; rerender(); window.scrollTo(0, 0); }));
   document.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { settings.filter = b.dataset.f; rerender(); }));
   document.querySelectorAll("[data-o]").forEach((b) => b.addEventListener("click", () => { settings.order = b.dataset.o; rerender(); }));
-  document.querySelectorAll(".glabel").forEach((h) => h.addEventListener("click", () => {
-    const sec = h.parentElement;
-    sec.classList.toggle("closed");
-    settings.collapsed[sec.dataset.key] = sec.classList.contains("closed");
-    saveSettings(settings);
+  // 枠の開閉: 左のラベル・まとめカードのどちらを押しても切り替わる
+  document.querySelectorAll("[data-toggle], [data-open]").forEach((h) => h.addEventListener("click", () => {
+    const key = h.closest("section").dataset.key;
+    settings.opened[key] = !settings.opened[key];
+    rerender();
+  }));
+  // すべて開く / すべて閉じる (表示中の表の枠が対象)
+  document.querySelectorAll("[data-all]").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll("section[data-key]").forEach((s) => { settings.opened[s.dataset.key] = b.dataset.all === "open"; });
+    rerender();
   }));
   document.querySelector('[data-act="lv"]').addEventListener("click", () => runUpdate(state, [lv]));
   document.querySelector('[data-act="all"]').addEventListener("click", () => runUpdate(state, state.allLevels));
