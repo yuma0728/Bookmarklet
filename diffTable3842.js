@@ -477,7 +477,9 @@ body.pt{background:var(--bg);background-image:none}
 .bn-banner{background:linear-gradient(90deg,var(--c1) 0%,var(--c2) 50%,var(--c3) 100%);box-shadow:0 1px 2px rgba(0,0,0,.18)}
 .bn-banner::after{background:linear-gradient(180deg,rgba(255,255,255,.12),transparent 40%)}
 .bn-foot{color:var(--ink)}
-.bn-genre{text-shadow:none;color:#fff}
+/* ジャンル名: 影ではなく、半透明の小さな札に乗せて読みやすくする */
+.bn-genre{text-shadow:none;color:#fff;font-size:9px;font-weight:800;background:rgba(20,20,30,.38);border-radius:3px;padding:0 4px;line-height:13px;
+  top:3px;left:4px;right:auto;max-width:calc(100% - 30px)}
 /* Lv・クリア数・メダルは上部の固定エリアに置く (スクロールしても見えるよう、小さめに表示) */
 .pt-top .hero{margin:7px 0 0;padding:6px 10px 7px;border-radius:12px;box-shadow:none}
 .pt-top .hero-row{gap:10px}
