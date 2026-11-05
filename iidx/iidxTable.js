@@ -414,6 +414,7 @@ button{font-family:inherit}
 .seg button{border:0;background:transparent;border-radius:7px;padding:7px 0;font-size:13.5px;font-weight:800;color:var(--sub)}
 .seg button.on{background:var(--ink);color:#fff}
 .seg.lv button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.seg button.off{color:#c4c1ba;text-decoration:line-through;text-decoration-thickness:1px}
 .chips{display:flex;gap:5px;margin-top:6px}
 .chips button{flex:1;border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 0;font-size:12.5px;color:var(--sub)}
 .chips button.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -526,9 +527,12 @@ function passFilter(c, filter, goal) {
 
 function render(state) {
   const { data, store, settings } = state;
-  const purpose = PURPOSES.find((p) => p.id === settings.purpose) || PURPOSES[0];
-  const levels = data.tables.filter((t) => t.purpose === purpose.id).map((t) => t.level);
+  // ☆を先に選び、その☆にある目的 (ノマゲ以下/ハード/エクハ) から選ぶ
+  const levels = state.allLevels;
   if (!levels.includes(settings.level)) settings.level = levels[levels.length - 1];
+  const available = PURPOSES.filter((p) => data.tables.some((t) => t.purpose === p.id && t.level === settings.level));
+  const purpose = available.find((p) => p.id === settings.purpose) || available[0];
+  settings.purpose = purpose.id;
   const table = data.tables.find((t) => t.purpose === purpose.id && t.level === settings.level);
   const lv = table.level;
   const played = store?.levels?.[lv];
@@ -604,8 +608,11 @@ function render(state) {
   document.body.innerHTML = `
     <div class="top">
       <div class="head"><b>beatmania IIDX 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]))}</span></div>
-      <div class="seg" style="grid-template-columns:repeat(${PURPOSES.length},1fr)">${PURPOSES.map((p) => `<button data-p="${p.id}" class="${p.id === purpose.id ? "on" : ""}">${p.label}</button>`).join("")}</div>
       <div class="seg lv" style="grid-template-columns:repeat(${levels.length},1fr)">${levels.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">☆${l}</button>`).join("")}</div>
+      <div class="seg" style="grid-template-columns:repeat(${PURPOSES.length},1fr)">${PURPOSES.map((p) => {
+        const ok = available.includes(p);
+        return `<button data-p="${p.id}" class="${p.id === purpose.id ? "on" : ""}${ok ? "" : " off"}"${ok ? "" : " disabled"}>${p.label}</button>`;
+      }).join("")}</div>
       <div class="chips">${[["all", "すべて"], ["done", "達成済み"], ["notdone", "未達成"], ["noplay", "未プレイ"]].map(([k, t]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${t}</button>`).join("")}</div>
       <div class="sorter"><button data-o="hard" class="${!easyFirst ? "on" : ""}">難しい順</button><button data-o="easy" class="${easyFirst ? "on" : ""}">簡単順</button></div>
     </div>
