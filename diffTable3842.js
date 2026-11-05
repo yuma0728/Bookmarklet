@@ -1,0 +1,575 @@
+// pop'n music クリア難易度表 Lv38～42 自動記入ツール (個人カスタマイズ版)
+//
+// 使い方(ブックマークレット):
+//   javascript: import("https://<自分のアカウント>.github.io/Bookmarklet/diffTable3842.js").then(m => m.default());
+//
+// - 難易度表の中身は list/popn3842.csv を実行時に読み込む。CSVを差し替えるだけで表を更新できる。
+// - 公式サイト(e-amusement)のプレイデータを Lv38～42 分取得し、端末(localStorage)に保存する。
+// - 外部ライブラリ(jQuery等)には依存しない単体ファイル。アイコン画像のみ icon/ を参照する。
+
+const FALLBACK_BASE_URL = "https://wanau-ynw.github.io/Bookmarklet";
+let BASE_URL;
+try {
+  BASE_URL = new URL(".", import.meta.url).href.replace(/\/$/, "");
+} catch (e) {
+  BASE_URL = FALLBACK_BASE_URL;
+}
+
+const PLAY_DATA_URL =
+  "https://p.eagate.573.jp/game/popn/popn29/playdata/mu_lv.html?version=-1&bemani=0&category=0&keyword=&sort=&sort_type=up&";
+const CSV_PATH = "/list/popn3842.csv";
+const LEVELS = [38, 39, 40, 41, 42];
+
+const STORE_KEY = "popn3842_playdata";
+const SETTINGS_KEY = "popn3842_settings";
+const STORE_VER = 1;
+
+// 公式サイト負荷軽減: 少数ページずつまとめて取得し、間に待機を入れる (既存ツールと同じ配慮)
+const FETCH_BATCH_SIZE = 4;
+const FETCH_BATCH_INTERVAL_MS = 500;
+
+// 難易度カテゴリ (表示順 = 難しい→簡単)
+const CATEGORIES = ["詐称", "強", "中", "弱", "逆詐称", "個人差", "未評価"];
+const CATEGORY_RE = /^(逆詐称|詐称|個人差|強|中|弱)/;
+
+// メダル: 0=未プレイ/取得不可, 1-3=黒(未クリア), 4=緑, 5=橙, 6-8=銅(クリア), 9-11=銀(フルコン), 12=金(パーフェクト)
+const MEDAL_LETTER = { a: 12, b: 11, c: 10, d: 9, e: 8, f: 7, g: 6, h: 3, i: 2, j: 1, k: 4, l: 5 };
+const RANK_NAME = {
+  s_plus: 12, s: 11, a3: 10, a2_plus: 9, a2: 8, a1_plus: 7, a1: 6, b_plus: 5, b: 4, c: 3, d: 2, e: 1,
+};
+
+// ランプ(表示上のクリア状況)の定義
+const LAMPS = [
+  { id: "perfect", label: "パフェ", test: (m) => m === 12 },
+  { id: "fc", label: "フルコン", test: (m) => m >= 9 && m <= 11 },
+  { id: "clear", label: "クリア", test: (m) => m >= 6 && m <= 8 },
+  { id: "orange", label: "橙", test: (m) => m === 5 },
+  { id: "easy", label: "緑", test: (m) => m === 4 },
+  { id: "failed", label: "未クリア", test: (m) => m >= 1 && m <= 3 },
+  { id: "noplay", label: "未プレイ", test: (m) => m === 0 },
+];
+const isCleared = (m) => m >= 6;
+
+/* ------------------------------------------------------------------ */
+/* ユーティリティ                                                       */
+/* ------------------------------------------------------------------ */
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// 曲名・ジャンル名の表記ゆれ吸収 (全角/半角, 波線, 空白, 大文字小文字, 引用符)
+function norm(s) {
+  return String(s ?? "")
+    .normalize("NFKC")
+    .replace(/[’‘`´]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[～〜~＼\\\s]/g, "")
+    .toLowerCase();
+}
+
+async function resToText(res) {
+  const buf = await res.arrayBuffer();
+  const ct = (res.headers.get("Content-Type") || "").toLowerCase();
+  if (ct.includes("utf-8")) return new TextDecoder().decode(buf);
+  return new TextDecoder("Shift_JIS").decode(buf);
+}
+
+function loadSettings() {
+  try {
+    return Object.assign({ lv: 38, filter: "all", collapsed: {} }, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"));
+  } catch (e) {
+    return { lv: 38, filter: "all", collapsed: {} };
+  }
+}
+function saveSettings(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+function loadPlayData() {
+  try {
+    const obj = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (!obj || obj.version !== STORE_VER || !obj.levels) return null;
+    return obj;
+  } catch (e) {
+    return null;
+  }
+}
+function savePlayData(obj) {
+  obj.version = STORE_VER;
+  localStorage.setItem(STORE_KEY, JSON.stringify(obj));
+}
+
+function formatDate(ts) {
+  if (!ts) return "未取得";
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, "0");
+  const diff = (Date.now() - ts) / 86400000;
+  const hours = Math.round(diff * 24);
+  const ago = diff >= 1 ? `${diff.toFixed(1)}日前` : hours >= 1 ? `${hours}時間前` : "たった今";
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} (${ago})`;
+}
+
+/* ------------------------------------------------------------------ */
+/* CSV (難易度表) の読み込み                                             */
+/* ------------------------------------------------------------------ */
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", q = false;
+  text = text.replace(/^﻿/, "");
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; } else q = false;
+      } else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); rows.push(row); row = []; field = "";
+    } else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((x) => x.trim() !== ""));
+}
+
+// CSVの1行を難易度表の1曲に変換
+function toEntry(cols, index) {
+  const [lvStr, genreType, title, bpm, diff] = cols.map((x) => (x ?? "").trim());
+  const lv = parseInt(lvStr, 10);
+  if (!LEVELS.includes(lv) || !title) return null;
+  const tm = genreType.match(/^(.*)\((H|EX|N|E)\)\s*$/);
+  const genre = tm ? tm[1].trim() : genreType;
+  const type = tm ? tm[2] : "";
+  const cm = diff.match(CATEGORY_RE);
+  // 難易度欄が空欄の曲は「未評価」枠にまとめる
+  const category = cm ? cm[1] : "未評価";
+  const soflan = /\d\s*[～〜~\-－]\s*\d/.test(bpm);
+  return { index, lv, genre, type, title, bpm, category, soflan };
+}
+
+async function loadTable() {
+  const res = await fetch(BASE_URL + CSV_PATH + "?t=" + Date.now(), { cache: "no-store" });
+  if (!res.ok) throw new Error("難易度表CSVの読み込みに失敗しました (" + res.status + ")");
+  const rows = parseCSV(await res.text());
+  const body = rows[0] && /lv/i.test(rows[0][0]) ? rows.slice(1) : rows;
+  const entries = body.map((r, i) => toEntry(r, i)).filter(Boolean);
+  const byLv = {};
+  for (const lv of LEVELS) byLv[lv] = entries.filter((e) => e.lv === lv);
+  return byLv;
+}
+
+/* ------------------------------------------------------------------ */
+/* 公式サイトからのプレイデータ取得                                       */
+/* ------------------------------------------------------------------ */
+
+function parseListDoc(doc) {
+  const tables = doc.querySelectorAll(".mu_list_lv_table");
+  if (tables.length !== 1) return null;
+  const out = [];
+  for (const li of tables[0].querySelectorAll("li")) {
+    if (li.classList.contains("st_th")) continue;
+    try {
+      const c0 = li.children[0];
+      const c3 = li.children[3];
+      const song = c0.querySelector("a").textContent.trim();
+      const genre = (c0.querySelector("p:nth-of-type(1)")?.textContent || "").trim();
+      const score = parseInt((c3.querySelector("p")?.textContent || "0").replace(/[^\d]/g, ""), 10) || 0;
+      const mimg = c3.querySelector("img:nth-of-type(1)");
+      const rimg = c3.querySelector("img:nth-of-type(2)");
+      const mm = mimg ? (mimg.getAttribute("src") || "").match(/meda_([a-z]+)\.png/) : null;
+      const rm = rimg ? (rimg.getAttribute("src") || "").match(/rank_([a-z0-9_]+)\.png/) : null;
+      const medal = mm && MEDAL_LETTER[mm[1]] ? MEDAL_LETTER[mm[1]] : 0;
+      const rank = rm && RANK_NAME[rm[1]] ? RANK_NAME[rm[1]] : 0;
+      // 譜面種別(H/EX)の判別用に、他の列のテキストも控えておく
+      const extra = Array.from(li.children).slice(1, 3).map((x) => x.textContent.trim()).join(" ");
+      out.push({ song, genre, score, medal, rank, extra });
+    } catch (e) {
+      console.warn("行の解析に失敗", e, li);
+    }
+  }
+  return out;
+}
+
+async function fetchDoc(url) {
+  const res = await fetch(url, { credentials: "include" });
+  const text = await resToText(res);
+  return new DOMParser().parseFromString(text, "text/html");
+}
+
+async function fetchLevel(lv, progress) {
+  const first = await fetchDoc(`${PLAY_DATA_URL}page=0&lv=${lv}`);
+  const firstRows = parseListDoc(first);
+  if (!firstRows) {
+    throw new Error("プレイデータを読み取れませんでした。公式サイトにログインした状態で実行してください。");
+  }
+  const pager = first.getElementById("s_page");
+  const size = pager && pager.children.length > 0 ? pager.children.length : 1;
+  const results = [...firstRows];
+  progress(lv, 1, size);
+  const pages = Array.from({ length: size - 1 }, (_, i) => i + 1);
+  for (let i = 0; i < pages.length; i += FETCH_BATCH_SIZE) {
+    await sleep(FETCH_BATCH_INTERVAL_MS);
+    const batch = pages.slice(i, i + FETCH_BATCH_SIZE);
+    const docs = await Promise.all(batch.map((p) => fetchDoc(`${PLAY_DATA_URL}page=${p}&lv=${lv}`)));
+    for (const d of docs) {
+      const rows = parseListDoc(d);
+      if (!rows) throw new Error(`Lv${lv} のプレイデータ読み込み中にエラーが発生しました`);
+      results.push(...rows);
+    }
+    progress(lv, Math.min(1 + i + FETCH_BATCH_SIZE, size), size);
+  }
+  return results;
+}
+
+// 指定Lvのデータを取得して保存。levels省略時は全Lv
+async function updatePlayData(levels, mock, progress) {
+  const store = loadPlayData() || { levels: {}, timestamps: {} };
+  store.timestamps = store.timestamps || {};
+  for (const lv of levels) {
+    store.levels[lv] = mock ? mock(lv) : await fetchLevel(lv, progress);
+    store.timestamps[lv] = Date.now();
+    if (!mock) await sleep(FETCH_BATCH_INTERVAL_MS);
+  }
+  store.timestamp = Date.now();
+  savePlayData(store);
+  return store;
+}
+
+/* ------------------------------------------------------------------ */
+/* 難易度表とプレイデータの照合                                           */
+/* ------------------------------------------------------------------ */
+
+function matchLevel(entries, played) {
+  const map = new Map();
+  for (const p of played || []) {
+    const k = norm(p.song);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(p);
+  }
+  return entries.map((e) => {
+    let cands = map.get(norm(e.title)) || [];
+    if (cands.length > 1) {
+      const g = cands.filter((p) => norm(p.genre) === norm(e.genre));
+      if (g.length) cands = g;
+    }
+    if (cands.length > 1 && e.type) {
+      const t = cands.filter((p) => (e.type === "EX" ? /EX/i.test(p.extra) : /HYPER|\bH\b/i.test(p.extra)));
+      if (t.length) cands = t;
+    }
+    const p = cands[0];
+    return Object.assign({}, e, p ? { found: true, medal: p.medal, rank: p.rank, score: p.score } : { found: false, medal: 0, rank: 0, score: 0 });
+  });
+}
+
+function lampOf(r) {
+  if (!r.found) return "nodata";
+  if (r.score === 0 && r.medal === 0) return "noplay";
+  return (LAMPS.find((l) => l.test(r.medal)) || LAMPS[LAMPS.length - 1]).id;
+}
+
+/* ------------------------------------------------------------------ */
+/* 画面描画                                                              */
+/* ------------------------------------------------------------------ */
+
+const CSS = `
+:root{--bg:#f4f5f8;--card:#fff;--ink:#1c1f26;--sub:#6b7280;--line:#e5e7eb;--accent:#e4007f;
+--l-perfect:#f5c518;--l-fc:#9aa4b2;--l-clear:#c46a2c;--l-orange:#ff8a00;--l-easy:#22b357;--l-failed:#3b3f4a;--l-noplay:#d9dce3;--l-nodata:#ffffff;}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body.pt{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;font-size:15px;line-height:1.35;
+padding:0 0 calc(24px + env(safe-area-inset-bottom));}
+.pt-top{position:sticky;top:0;z-index:10;background:rgba(244,245,248,.92);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+padding:calc(8px + env(safe-area-inset-top)) 12px 8px;border-bottom:1px solid var(--line)}
+.pt-title{font-size:13px;font-weight:700;color:var(--sub);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pt-title b{color:var(--accent)}
+.pt-tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:6px;background:#e3e5ea;border-radius:10px;padding:3px}
+.pt-tabs button{border:0;background:transparent;border-radius:8px;padding:8px 0;font-size:15px;font-weight:700;color:var(--sub);font-family:inherit}
+.pt-tabs button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.pt-filter{display:flex;gap:6px;margin-top:8px}
+.pt-filter button{flex:1;border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 0;font-size:13px;color:var(--sub);font-family:inherit}
+.pt-filter button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.pt-wrap{padding:10px 10px 0}
+.pt-sum{background:var(--card);border-radius:14px;padding:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.pt-sum-head{display:flex;align-items:baseline;justify-content:space-between}
+.pt-sum-head .big{font-size:26px;font-weight:800}
+.pt-sum-head .big small{font-size:14px;color:var(--sub);font-weight:600}
+.pt-sum-head .rate{font-size:14px;color:var(--sub)}
+.pt-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:8px 0;background:var(--l-noplay)}
+.pt-bar i{display:block;height:100%}
+.pt-legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--sub)}
+.pt-legend span{display:inline-flex;align-items:center;gap:4px}
+.pt-legend i{width:10px;height:10px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.08)}
+.pt-group{margin-top:14px}
+.pt-gh{display:flex;align-items:center;gap:8px;padding:6px 4px;font-weight:800;font-size:16px;user-select:none;-webkit-user-select:none}
+.pt-gh .tag{color:#fff;border-radius:6px;padding:2px 8px;font-size:14px}
+.pt-gh .cnt{margin-left:auto;font-size:13px;color:var(--sub);font-weight:600}
+.pt-gh .chev{color:var(--sub);font-size:12px;transition:transform .15s}
+.pt-group.closed .chev{transform:rotate(-90deg)}
+.pt-group.closed .pt-list{display:none}
+.c-詐称{background:#7c1fd1}.c-強{background:#e11d48}.c-中{background:#f59e0b}.c-弱{background:#16a34a}.c-逆詐称{background:#0284c7}.c-個人差{background:#64748b}.c-未評価{background:#a8a29e}.c-ソフラン{background:#111827}
+.pt-list{display:flex;flex-direction:column;gap:6px}
+.pt-row{display:flex;align-items:stretch;background:var(--card);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05);min-height:52px}
+.pt-lamp{width:7px;flex:none}
+.pt-main{flex:1;min-width:0;padding:7px 8px 7px 10px;display:flex;flex-direction:column;justify-content:center}
+.pt-name{font-weight:700;font-size:15px;word-break:break-word}
+.pt-sub{font-size:11.5px;color:var(--sub);margin-top:2px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.pt-type{font-size:10px;font-weight:800;border-radius:4px;padding:0 4px;line-height:15px;color:#fff;background:#f97316}
+.pt-type.EX{background:#dc2626}
+.pt-cat{font-size:10px;font-weight:800;border-radius:4px;padding:0 4px;line-height:15px;color:#fff}
+.pt-un{font-size:10px;border:1px solid var(--line);border-radius:4px;padding:0 3px;line-height:14px}
+.pt-res{flex:none;width:78px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;padding:4px 8px 4px 0;gap:1px}
+.pt-icons{display:flex;gap:1px;height:26px}
+.pt-icons img{height:26px;width:26px}
+.pt-score{font-size:12px;font-variant-numeric:tabular-nums;color:var(--sub);font-weight:600}
+.pt-none{font-size:11px;color:var(--sub)}
+.l-perfect .pt-lamp{background:linear-gradient(#ffe066,#e0a800)}
+.l-fc .pt-lamp{background:linear-gradient(#e6ebf1,#8794a5)}
+.l-clear .pt-lamp{background:var(--l-clear)}
+.l-orange .pt-lamp{background:var(--l-orange)}
+.l-easy .pt-lamp{background:var(--l-easy)}
+.l-failed .pt-lamp{background:var(--l-failed)}
+.l-noplay .pt-lamp{background:var(--l-noplay)}
+.l-nodata .pt-lamp{background:repeating-linear-gradient(45deg,#e5e7eb 0 4px,#fff 4px 8px)}
+.l-perfect{background:#fffbea}.l-fc{background:#f6f8fb}
+.l-noplay .pt-name,.l-nodata .pt-name{color:#4b5563}
+.compact .pt-list{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.compact .pt-row{min-height:46px;border-radius:8px}
+.compact .pt-lamp{width:5px}
+.compact .pt-main{padding:4px 4px 4px 7px}
+.compact .pt-name{font-size:12.5px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.compact .pt-sub{margin-top:1px;font-size:10px}
+.compact .pt-sub > span:not(.pt-type):not(.pt-cat){display:none}
+.compact .pt-res{width:30px;padding:2px 4px 2px 0}
+.compact .pt-icons img:first-child:not(:last-child){display:none}
+.compact .pt-icons,.compact .pt-icons img{height:22px;width:22px}
+.compact .pt-score,.compact .pt-none{display:none}
+.compact .l-clear{background:#fbefe6}.compact .l-fc{background:#eef1f5}.compact .l-perfect{background:#fff6cc}
+.compact .l-easy{background:#e8f7ee}.compact .l-orange{background:#fff1e0}.compact .l-failed{background:#e4e5e9}
+.pt-view{display:flex;justify-content:flex-end;gap:4px;margin-top:6px;font-size:12px;color:var(--sub);align-items:center}
+.pt-view button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 8px;font-size:12px;color:var(--sub);font-family:inherit}
+.pt-view button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pt-empty{font-size:13px;color:var(--sub);padding:6px 4px}
+.pt-foot{margin:22px 10px 0;display:flex;flex-direction:column;gap:8px}
+.pt-btn{border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:700;font-family:inherit;background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.pt-btn.primary{background:var(--accent);color:#fff}
+.pt-meta{font-size:12px;color:var(--sub);text-align:center}
+details.pt-miss{background:#fff;border-radius:12px;padding:10px 12px;font-size:13px;margin-top:14px}
+details.pt-miss summary{font-weight:700;color:var(--sub)}
+details.pt-miss li{margin:3px 0}
+.pt-msg{padding:calc(40px + env(safe-area-inset-top)) 20px;text-align:center;font-size:15px;color:var(--sub);white-space:pre-wrap}
+.pt-msg .err{color:#dc2626;font-weight:700}
+.pt-prog{height:6px;background:#e3e5ea;border-radius:3px;overflow:hidden;margin:14px auto 0;max-width:260px}
+.pt-prog i{display:block;height:100%;background:var(--accent);transition:width .2s}
+`;
+
+const LAMP_COLOR = {
+  perfect: "#f5c518", fc: "#9aa4b2", clear: "#c46a2c", orange: "#ff8a00", easy: "#22b357",
+  failed: "#3b3f4a", noplay: "#d9dce3",
+};
+
+function setupPage() {
+  document.head.innerHTML =
+    '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">' +
+    "<title>ポップン難易度表 Lv38-42</title>";
+  const st = document.createElement("style");
+  st.textContent = CSS;
+  document.head.appendChild(st);
+  document.body.removeAttribute("style");
+  document.body.className = "pt";
+  document.body.innerHTML = "";
+  window.scrollTo(0, 0);
+}
+
+function showMessage(html, progress) {
+  document.body.innerHTML =
+    `<div class="pt-msg">${html}${progress != null ? `<div class="pt-prog"><i style="width:${Math.round(progress * 100)}%"></i></div>` : ""}</div>`;
+}
+
+function rowHTML(r, showCat) {
+  const lamp = lampOf(r);
+  let res;
+  if (!r.found) res = `<span class="pt-none">データなし</span>`;
+  else if (lamp === "noplay") res = `<span class="pt-none">未プレイ</span>`;
+  else {
+    const icons =
+      (r.rank ? `<img src="${BASE_URL}/icon/s_${r.rank}.png" alt="">` : "") +
+      (r.medal ? `<img src="${BASE_URL}/icon/c_${r.medal}.png" alt="">` : "");
+    res = `<div class="pt-icons">${icons}</div><div class="pt-score">${r.score.toLocaleString()}</div>`;
+  }
+  const cat = showCat ? `<span class="pt-cat c-${r.category}">${r.category}</span>` : "";
+  const bpm = r.soflan ? `<span>BPM ${esc(r.bpm)}</span>` : "";
+  return `<div class="pt-row l-${lamp}">
+    <div class="pt-lamp"></div>
+    <div class="pt-main"><div class="pt-name">${esc(r.title)}</div>
+      <div class="pt-sub">${cat}${r.type ? `<span class="pt-type ${r.type}">${r.type}</span>` : ""}<span>${esc(r.genre)}</span>${bpm}</div></div>
+    <div class="pt-res">${res}</div></div>`;
+}
+
+function passFilter(r, filter) {
+  if (filter === "notclear") return !isCleared(r.medal);
+  if (filter === "noplay") return lampOf(r) === "noplay" || !r.found;
+  return true;
+}
+
+function groupHTML(key, label, rows, filter, settings, showCat) {
+  const cleared = rows.filter((r) => isCleared(r.medal)).length;
+  const shown = rows.filter((r) => passFilter(r, filter));
+  const closed = settings.collapsed[key] ? " closed" : "";
+  return `<section class="pt-group${closed}" data-key="${esc(key)}">
+    <div class="pt-gh"><span class="chev">▼</span><span class="tag c-${label}">${label}</span>
+      <span class="cnt">クリア ${cleared}/${rows.length}</span></div>
+    <div class="pt-list">${shown.length ? shown.map((r) => rowHTML(r, showCat)).join("") : `<div class="pt-empty">該当する曲はありません</div>`}</div>
+  </section>`;
+}
+
+function summaryHTML(rows) {
+  const counts = {};
+  for (const l of LAMPS) counts[l.id] = 0;
+  let nodata = 0;
+  for (const r of rows) {
+    const l = lampOf(r);
+    if (l === "nodata") nodata++;
+    else counts[l]++;
+  }
+  const total = rows.length;
+  const cleared = rows.filter((r) => isCleared(r.medal)).length;
+  const bar = LAMPS.map((l) => (counts[l.id] ? `<i style="width:${(counts[l.id] / total) * 100}%;background:${LAMP_COLOR[l.id]}"></i>` : "")).join("");
+  const legend = LAMPS.map((l) => `<span><i style="background:${LAMP_COLOR[l.id]}"></i>${l.label} ${counts[l.id]}</span>`).join("") +
+    (nodata ? `<span><i style="background:repeating-linear-gradient(45deg,#e5e7eb 0 3px,#fff 3px 6px)"></i>データなし ${nodata}</span>` : "");
+  return `<div class="pt-sum">
+    <div class="pt-sum-head"><div class="big">${cleared}<small> / ${total} クリア</small></div>
+      <div class="rate">${total ? ((cleared / total) * 100).toFixed(1) : "0.0"}%</div></div>
+    <div class="pt-bar">${bar}</div>
+    <div class="pt-legend">${legend}</div></div>`;
+}
+
+function render(state) {
+  const { table, store, settings } = state;
+  const lv = settings.lv;
+  const rows = matchLevel(table[lv] || [], store?.levels?.[lv]);
+  const normal = rows.filter((r) => !r.soflan);
+  const soflan = rows.filter((r) => r.soflan);
+  const catRank = (c) => CATEGORIES.indexOf(c);
+  const byDifficulty = (a, b) => catRank(a.category) - catRank(b.category) || a.index - b.index;
+  normal.sort(byDifficulty);
+  soflan.sort(byDifficulty);
+
+  let groups = "";
+  for (const c of CATEGORIES) {
+    const g = normal.filter((r) => r.category === c);
+    if (g.length) groups += groupHTML(`${lv}-${c}`, c, g, settings.filter, settings, false);
+  }
+  if (soflan.length) groups += groupHTML(`${lv}-ソフラン`, "ソフラン", soflan, settings.filter, settings, true);
+
+  const missing = rows.filter((r) => !r.found);
+  const missHTML = store?.levels?.[lv] && missing.length
+    ? `<details class="pt-miss"><summary>公式データと照合できなかった曲 (${missing.length})</summary>
+        <div style="margin-top:6px">CSVの曲名と公式サイトの曲名が一致しない可能性があります。</div>
+        <ul>${missing.map((r) => `<li>${esc(r.title)} <span style="color:#6b7280">(${esc(r.genre)} ${r.type})</span></li>`).join("")}</ul></details>`
+    : "";
+
+  const f = settings.filter;
+  document.body.innerHTML = `
+    <div class="pt-top">
+      <div class="pt-title"><span><b>pop'n</b> クリア難易度表</span><span>${esc(formatDate(store?.timestamps?.[lv]))}</span></div>
+      <div class="pt-tabs">${LEVELS.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">Lv${l}</button>`).join("")}</div>
+      <div class="pt-filter">
+        <button data-f="all" class="${f === "all" ? "on" : ""}">すべて</button>
+        <button data-f="notclear" class="${f === "notclear" ? "on" : ""}">未クリアのみ</button>
+        <button data-f="noplay" class="${f === "noplay" ? "on" : ""}">未プレイのみ</button>
+      </div>
+      <div class="pt-view">表示
+        <button data-v="list" class="${settings.view !== "compact" ? "on" : ""}">詳細</button>
+        <button data-v="compact" class="${settings.view === "compact" ? "on" : ""}">コンパクト</button>
+      </div>
+    </div>
+    <div class="pt-wrap${settings.view === "compact" ? " compact" : ""}">
+      ${store?.levels?.[lv] ? summaryHTML(rows) : `<div class="pt-sum">Lv${lv} のプレイデータがまだありません。下の「このLvを更新」を押してください。</div>`}
+      ${groups}
+      ${missHTML}
+    </div>
+    <div class="pt-foot">
+      <button class="pt-btn primary" data-act="update-lv">Lv${lv} のデータを更新</button>
+      <button class="pt-btn" data-act="update-all">全Lv(38～42)のデータを更新</button>
+      <div class="pt-meta">難易度表: list/popn3842.csv ／ 全${LEVELS.reduce((a, l) => a + (table[l]?.length || 0), 0)}曲</div>
+    </div>`;
+
+  document.querySelectorAll(".pt-tabs button").forEach((b) =>
+    b.addEventListener("click", () => {
+      settings.lv = parseInt(b.dataset.lv, 10);
+      saveSettings(settings);
+      render(state);
+      window.scrollTo(0, 0);
+    })
+  );
+  document.querySelectorAll(".pt-filter button").forEach((b) =>
+    b.addEventListener("click", () => {
+      settings.filter = b.dataset.f;
+      saveSettings(settings);
+      render(state);
+    })
+  );
+  document.querySelectorAll(".pt-view button").forEach((b) =>
+    b.addEventListener("click", () => {
+      settings.view = b.dataset.v;
+      saveSettings(settings);
+      render(state);
+    })
+  );
+  document.querySelectorAll(".pt-gh").forEach((h) =>
+    h.addEventListener("click", () => {
+      const sec = h.parentElement;
+      const key = sec.dataset.key;
+      sec.classList.toggle("closed");
+      settings.collapsed[key] = sec.classList.contains("closed");
+      saveSettings(settings);
+    })
+  );
+  document.querySelector('[data-act="update-lv"]').addEventListener("click", () => runUpdate(state, [lv]));
+  document.querySelector('[data-act="update-all"]').addEventListener("click", () => runUpdate(state, LEVELS));
+}
+
+async function runUpdate(state, levels) {
+  const label = levels.length === 1 ? `Lv${levels[0]}` : `Lv${levels[0]}～${levels[levels.length - 1]}`;
+  showMessage(`${label} のプレイデータを取得中・・・\n公式サイトに負荷をかけないよう少しずつ取得しています`, 0);
+  try {
+    state.store = await updatePlayData(levels, state.mock, (lv, cur, size) => {
+      const p = (levels.indexOf(lv) + cur / size) / levels.length;
+      showMessage(`${label} のプレイデータを取得中・・・\nLv${lv} ${cur}/${size} ページ`, p);
+    });
+    render(state);
+  } catch (e) {
+    console.error(e);
+    showMessage(`<span class="err">${esc(e.message)}</span>\n\n<button class="pt-btn" onclick="location.reload()">ページを再読み込み</button>`);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* エントリポイント                                                       */
+/* ------------------------------------------------------------------ */
+
+// options.mock: 公式サイトを使わずに動作確認するためのダミーデータ生成関数 (preview.html用)
+export default async (options = {}) => {
+  try {
+    setupPage();
+    showMessage("難易度表を読み込み中・・・");
+    const table = await loadTable();
+    const settings = loadSettings();
+    if (!LEVELS.includes(settings.lv)) settings.lv = LEVELS[0];
+    const state = { table, settings, store: loadPlayData(), mock: options.mock || null };
+    if (!state.store) {
+      // 初回は全Lvのデータを取得する
+      await runUpdate(state, LEVELS);
+    } else {
+      render(state);
+    }
+  } catch (e) {
+    console.error(e);
+    document.body.innerHTML = `<div style="padding:40px 20px;color:#dc2626">エラーが発生しました: ${esc(e && e.message ? e.message : e)}</div>`;
+  }
+};
