@@ -446,6 +446,16 @@ body.pt{background:var(--bg);background-image:none}
 .bn.l-noplay .bn-banner,.bn.l-nodata .bn-banner{filter:none}
 .bn.l-noplay .bn-banner::after,.bn.l-nodata .bn-banner::after{background:rgba(242,240,236,.6)}
 .bn-genre{z-index:1}
+/* 曲名・ジャンル名: 薄い色のバナーの上でも読めるよう、太めの黒い縁取りと影を付ける */
+.bn-title{text-shadow:
+  1.5px 0 0 rgba(15,15,25,.9),-1.5px 0 0 rgba(15,15,25,.9),0 1.5px 0 rgba(15,15,25,.9),0 -1.5px 0 rgba(15,15,25,.9),
+  1px 1px 0 rgba(15,15,25,.9),-1px -1px 0 rgba(15,15,25,.9),1px -1px 0 rgba(15,15,25,.9),-1px 1px 0 rgba(15,15,25,.9),
+  0 0 4px rgba(0,0,0,.55)}
+.bn-genre{text-shadow:1px 0 0 rgba(15,15,25,.85),-1px 0 0 rgba(15,15,25,.85),0 1px 0 rgba(15,15,25,.85),0 -1px 0 rgba(15,15,25,.85),0 0 3px rgba(0,0,0,.5)}
+.bn.l-noplay .bn-banner::after,.bn.l-nodata .bn-banner::after{background:rgba(242,240,236,.45)}
+/* 曲名の後ろ (バナーの下側) だけに薄い影を敷いて、白い曲名を読みやすくする */
+.bn-banner::before{content:"";position:absolute;left:0;right:0;bottom:0;height:58%;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.3));pointer-events:none}
+.bn-title{z-index:2}
 .hero{margin:10px 0 0;padding:12px 14px;background:var(--card);border:0;border-radius:16px;box-shadow:0 1px 3px rgba(38,43,58,.06)}
 .hero-row{align-items:center}
 .hero-lv{color:var(--ink);text-shadow:none;display:flex;align-items:baseline;gap:2px;line-height:1}
