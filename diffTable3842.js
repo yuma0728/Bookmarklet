@@ -496,6 +496,14 @@ body.pt{background:var(--bg);background-image:none}
 .bn-group.shut .bn-label .bn-in{position:static}
 .pt-group.shut .card{margin-top:2px}
 .bn-in .fold{font-size:10px;opacity:.9}
+/* 開いている枠の「閉じる」ボタン (枠の上と下) */
+.openbox{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.openhead{display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:10px;padding:5px 6px 5px 11px;font-size:12.5px;font-weight:800;box-shadow:0 1px 2px rgba(38,43,58,.06)}
+.openhead b{font-size:16px;color:var(--accent)}
+.openfoot{display:flex;justify-content:center;margin-top:4px}
+.closebtn{border:0;font-family:inherit;font-size:12px;font-weight:800;color:var(--ink);background:#e6e3dd;border-radius:999px;padding:5px 14px;white-space:nowrap}
+.openfoot .closebtn{padding:7px 26px}
+.pt-gh .closebtn{margin-left:8px;padding:3px 10px;font-size:11px}
 .allbar{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
 .allbar button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;color:var(--sub);font-family:inherit}
 .pt-wrap > .allbar + .bn-group,.pt-wrap > .allbar + .pt-group{margin-top:8px}
@@ -596,6 +604,13 @@ function tileHTML(r, showCat) {
     <div class="bn-foot">${foot}<i class="bn-lamp" style="background:${lampColor}"></i></div></div>`;
 }
 
+function keepInView(key) {
+  const sec = Array.from(document.querySelectorAll("section[data-key]")).find((s) => s.dataset.key === key);
+  const top = document.querySelector(".pt-top");
+  if (!sec || !top) return;
+  const y = sec.getBoundingClientRect().top - top.offsetHeight - 8;
+  if (y < 0) window.scrollBy(0, y);
+}
 // 枠が開いているか (初期状態は閉じている。開いた枠だけ覚えておく)
 const isOpen = (settings, key) => !!(settings.opened && settings.opened[key]);
 
@@ -620,7 +635,11 @@ function bannerGroupHTML(key, label, rows, filter, settings, showCat) {
   const open = isOpen(settings, key);
   const body = !open
     ? closedCardHTML(rows, shown.length, filter)
-    : `<div class="bn-grid">${shown.length ? shown.map((r) => tileHTML(r, showCat)).join("") : `<div class="pt-empty" style="grid-column:1/-1">該当する曲はありません</div>`}</div>`;
+    : `<div class="openbox">
+        <div class="openhead"><span>クリア <b>${cleared}</b> / ${rows.length}</span><button class="closebtn" data-toggle="1">閉じる ▴</button></div>
+        <div class="bn-grid">${shown.length ? shown.map((r) => tileHTML(r, showCat)).join("") : `<div class="pt-empty" style="grid-column:1/-1">該当する曲はありません</div>`}</div>
+        ${shown.length > 6 ? `<div class="openfoot"><button class="closebtn" data-toggle="1">閉じる ▴</button></div>` : ""}
+      </div>`;
   return `<section class="bn-group${open ? "" : " shut"}" data-key="${esc(key)}">
     <div class="bn-label c-${label} pop" data-toggle="1"><div class="bn-in"><span class="vt">${label}</span><small>${cleared}/${rows.length}</small>${open ? `<span class="fold">▲</span>` : ""}</div></div>
     ${body}
@@ -669,9 +688,10 @@ function groupHTML(key, label, rows, filter, settings, showCat) {
   const open = isOpen(settings, key);
   return `<section class="pt-group${open ? "" : " shut"}" data-key="${esc(key)}">
     <div class="pt-gh" data-toggle="1"><span class="chev">${open ? "▲" : "▼"}</span><span class="tag c-${label}">${label}</span>
-      <span class="cnt">クリア ${cleared}/${rows.length}</span></div>
+      <span class="cnt">クリア ${cleared}/${rows.length}</span>${open ? `<button class="closebtn">閉じる ▴</button>` : ""}</div>
     ${open
-      ? `<div class="pt-list">${shown.length ? shown.map((r) => rowHTML(r, showCat)).join("") : `<div class="pt-empty">該当する曲はありません</div>`}</div>`
+      ? `<div class="pt-list">${shown.length ? shown.map((r) => rowHTML(r, showCat)).join("") : `<div class="pt-empty">該当する曲はありません</div>`}</div>
+         ${shown.length > 6 ? `<div class="openfoot"><button class="closebtn" data-toggle="1">閉じる ▴</button></div>` : ""}`
       : closedCardHTML(rows, shown.length, settings.filter)}
   </section>`;
 }
@@ -802,6 +822,8 @@ function render(state) {
       settings.opened[key] = !settings.opened[key];
       saveSettings(settings);
       render(state);
+      // 閉じたとき、その枠が画面の上に隠れていたら枠の位置まで戻す (下の「閉じる」を押した場合など)
+      if (!settings.opened[key]) keepInView(key);
     })
   );
   // すべて開く / すべて閉じる (このLvの枠が対象)
