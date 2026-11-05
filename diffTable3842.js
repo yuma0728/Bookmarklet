@@ -479,6 +479,26 @@ body.pt{background:var(--bg);background-image:none}
 .pt-top .medals img{width:19px;height:19px}
 .pt-top .hero .pt-bar{margin-top:5px;height:5px}
 .pt-wrap > .bn-group:first-of-type,.pt-wrap > .pt-group:first-of-type{margin-top:10px}
+/* 閉じている枠のまとめカード */
+.card{flex:1;min-width:0;background:#fff;border-radius:12px;padding:9px 11px;box-shadow:0 1px 3px rgba(38,43,58,.08);cursor:pointer;display:flex;flex-direction:column;gap:6px}
+.card:active{transform:scale(.99)}
+.card-top{display:flex;align-items:center;gap:8px}
+.card-n{font-size:13px;font-weight:800;color:var(--ink)}
+.card-n b{font-size:18px;color:var(--accent)}
+.card .hit{font-size:11px;font-weight:800;color:var(--sub);background:var(--bg);border-radius:6px;padding:1px 6px}
+.card-btn{margin-left:auto;font-size:12px;font-weight:800;color:#fff;background:var(--ink);border-radius:999px;padding:3px 10px;white-space:nowrap}
+.card-bar{display:flex;height:7px;border-radius:4px;overflow:hidden;background:#e8e5df}
+.card-bar i{display:block;height:100%}
+.card-chips{display:flex;flex-wrap:wrap;gap:3px 8px;font-size:10.5px;font-weight:700;color:var(--sub)}
+.card-chips span{display:inline-flex;align-items:center;gap:3px}
+.card-chips i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.bn-group.shut{align-items:stretch}
+.bn-group.shut .bn-label .bn-in{position:static}
+.pt-group.shut .card{margin-top:2px}
+.bn-in .fold{font-size:10px;opacity:.9}
+.allbar{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
+.allbar button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;color:var(--sub);font-family:inherit}
+.pt-wrap > .allbar + .bn-group,.pt-wrap > .allbar + .pt-group{margin-top:8px}
 .pt-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;font-size:11px;color:var(--sub)}
 .pt-head b{font-size:15px;font-weight:900;color:var(--ink);white-space:nowrap;flex:none}
 .pt-head span{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -576,13 +596,34 @@ function tileHTML(r, showCat) {
     <div class="bn-foot">${foot}<i class="bn-lamp" style="background:${lampColor}"></i></div></div>`;
 }
 
+// 枠が開いているか (初期状態は閉じている。開いた枠だけ覚えておく)
+const isOpen = (settings, key) => !!(settings.opened && settings.opened[key]);
+
+// 閉じている枠に表示する「まとめカード」: クリア数・メダルの内訳・開くボタン
+function closedCardHTML(rows, shownCount, filter) {
+  const cleared = rows.filter((r) => isCleared(r.medal)).length;
+  const counts = {};
+  for (const r of rows) { const l = lampOf(r); counts[l] = (counts[l] || 0) + 1; }
+  const order = LAMPS.map((l) => l.id).filter((id) => counts[id]);
+  const bar = order.map((id) => `<i style="width:${(counts[id] / rows.length) * 100}%;background:${LAMP_COLOR[id]}"></i>`).join("");
+  const chips = order.map((id) => `<span><i style="background:${LAMP_COLOR[id]}"></i>${LAMPS.find((l) => l.id === id).label} ${counts[id]}</span>`).join("");
+  const hit = filter !== "all" ? `<span class="hit">該当 ${shownCount}曲</span>` : "";
+  return `<div class="card" data-open="1">
+    <div class="card-top"><span class="card-n">クリア <b>${cleared}</b> / ${rows.length}</span>${hit}<span class="card-btn">開く ▾</span></div>
+    <div class="card-bar">${bar}</div>
+    <div class="card-chips">${chips}</div></div>`;
+}
+
 function bannerGroupHTML(key, label, rows, filter, settings, showCat) {
   const cleared = rows.filter((r) => isCleared(r.medal)).length;
   const shown = rows.filter((r) => passFilter(r, filter));
-  const closed = settings.collapsed[key] ? " closed" : "";
-  return `<section class="bn-group${closed}" data-key="${esc(key)}">
-    <div class="bn-label c-${label} pop"><div class="bn-in"><span class="vt">${label}</span><small>${cleared}/${rows.length}</small></div></div>
-    <div class="bn-grid">${shown.length ? shown.map((r) => tileHTML(r, showCat)).join("") : `<div class="pt-empty" style="grid-column:1/-1">該当する曲はありません</div>`}</div>
+  const open = isOpen(settings, key);
+  const body = !open
+    ? closedCardHTML(rows, shown.length, filter)
+    : `<div class="bn-grid">${shown.length ? shown.map((r) => tileHTML(r, showCat)).join("") : `<div class="pt-empty" style="grid-column:1/-1">該当する曲はありません</div>`}</div>`;
+  return `<section class="bn-group${open ? "" : " shut"}" data-key="${esc(key)}">
+    <div class="bn-label c-${label} pop" data-toggle="1"><div class="bn-in"><span class="vt">${label}</span><small>${cleared}/${rows.length}</small>${open ? `<span class="fold">▲</span>` : ""}</div></div>
+    ${body}
   </section>`;
 }
 
@@ -625,11 +666,13 @@ function passFilter(r, filter) {
 function groupHTML(key, label, rows, filter, settings, showCat) {
   const cleared = rows.filter((r) => isCleared(r.medal)).length;
   const shown = rows.filter((r) => passFilter(r, filter));
-  const closed = settings.collapsed[key] ? " closed" : "";
-  return `<section class="pt-group${closed}" data-key="${esc(key)}">
-    <div class="pt-gh"><span class="chev">▼</span><span class="tag c-${label}">${label}</span>
+  const open = isOpen(settings, key);
+  return `<section class="pt-group${open ? "" : " shut"}" data-key="${esc(key)}">
+    <div class="pt-gh" data-toggle="1"><span class="chev">${open ? "▲" : "▼"}</span><span class="tag c-${label}">${label}</span>
       <span class="cnt">クリア ${cleared}/${rows.length}</span></div>
-    <div class="pt-list">${shown.length ? shown.map((r) => rowHTML(r, showCat)).join("") : `<div class="pt-empty">該当する曲はありません</div>`}</div>
+    ${open
+      ? `<div class="pt-list">${shown.length ? shown.map((r) => rowHTML(r, showCat)).join("") : `<div class="pt-empty">該当する曲はありません</div>`}</div>`
+      : closedCardHTML(rows, shown.length, settings.filter)}
   </section>`;
 }
 
@@ -709,6 +752,7 @@ function render(state) {
     </div>
     <div class="pt-wrap${view === "compact" ? " compact" : ""}" style="padding-top:0">
       ${store?.levels?.[lv] ? "" : `<div class="pt-sum" style="margin-top:10px">Lv${lv} のプレイデータがまだありません。下の「データを更新」を押してください。</div>`}
+      <div class="allbar"><button data-all="open">すべて開く</button><button data-all="close">すべて閉じる</button></div>
       ${groups}
       ${missHTML}
     </div>
@@ -750,13 +794,22 @@ function render(state) {
   // 縦ラベルを固定表示する位置 = 上部の固定バーの高さ
   const top = document.querySelector(".pt-top");
   if (top) document.body.style.setProperty("--toph", top.offsetHeight + 6 + "px");
-  document.querySelectorAll(".pt-gh, .bn-label").forEach((h) =>
+  // 枠の開閉: 左のラベル・見出し・まとめカードのどれを押しても切り替わる
+  settings.opened = settings.opened || {};
+  document.querySelectorAll("[data-toggle], [data-open]").forEach((h) =>
     h.addEventListener("click", () => {
-      const sec = h.parentElement;
-      const key = sec.dataset.key;
-      sec.classList.toggle("closed");
-      settings.collapsed[key] = sec.classList.contains("closed");
+      const key = h.closest("section").dataset.key;
+      settings.opened[key] = !settings.opened[key];
       saveSettings(settings);
+      render(state);
+    })
+  );
+  // すべて開く / すべて閉じる (このLvの枠が対象)
+  document.querySelectorAll("[data-all]").forEach((b) =>
+    b.addEventListener("click", () => {
+      document.querySelectorAll("section[data-key]").forEach((s) => { settings.opened[s.dataset.key] = b.dataset.all === "open"; });
+      saveSettings(settings);
+      render(state);
     })
   );
   document.querySelector('[data-act="update-lv"]').addEventListener("click", () => runUpdate(state, [lv]));
