@@ -455,6 +455,9 @@ body.pt{background:var(--bg);background-image:none}
 .bn-banner::after{background:linear-gradient(180deg,rgba(255,255,255,.12),transparent 40%)}
 .bn-foot{color:var(--ink)}
 .bn-genre{text-shadow:-1px -1px 0 rgba(0,0,0,.5),1px -1px 0 rgba(0,0,0,.5),-1px 1px 0 rgba(0,0,0,.5),1px 1px 0 rgba(0,0,0,.5);color:#fff}
+.pt-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;font-size:11px;color:var(--sub)}
+.pt-head b{font-size:15px;font-weight:900;color:var(--ink);white-space:nowrap;flex:none}
+.pt-head span{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .bn-label{position:relative;top:auto;align-self:stretch;padding:0}
 .bn-in{position:sticky;top:var(--toph,150px);display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0}
 `;
@@ -583,8 +586,7 @@ function heroHTML(lv, rows, store) {
   return `<div class="hero pop">
     <div class="hero-row">
       <div class="hero-lv"><small>Lv</small><b>${lv}</b></div>
-      <div class="hero-txt"><div class="hero-title">pop'n music 難易度表</div>
-        <div class="hero-date">データ取得 ${esc(formatDate(store?.timestamps?.[lv]))}</div>
+      <div class="hero-txt">
         <div class="hero-clear">${has ? `クリア <b>${cleared}</b> / ${total}（${total ? ((cleared / total) * 100).toFixed(1) : "0.0"}%）` : "プレイデータ未取得"}</div></div>
     </div>${strip}${bar}</div>`;
 }
@@ -658,6 +660,7 @@ function render(state) {
   const f = settings.filter;
   document.body.innerHTML = `
     <div class="pt-top">
+      <div class="pt-head pop"><b>pop'n music 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]).replace(/^\d{4}\//, ""))}</span></div>
       <div class="pt-tabs">${LEVELS.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">${l}</button>`).join("")}</div>
       <div class="pt-filter">
         ${[["all", "すべて"], ["cleared", "クリア済み"], ["notclear", "未クリア"], ["noplay", "未プレイ"]]
