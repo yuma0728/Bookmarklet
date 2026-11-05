@@ -455,6 +455,18 @@ body.pt{background:var(--bg);background-image:none}
 .bn-banner::after{background:linear-gradient(180deg,rgba(255,255,255,.12),transparent 40%)}
 .bn-foot{color:var(--ink)}
 .bn-genre{text-shadow:-1px -1px 0 rgba(0,0,0,.5),1px -1px 0 rgba(0,0,0,.5),-1px 1px 0 rgba(0,0,0,.5),1px 1px 0 rgba(0,0,0,.5);color:#fff}
+/* Lv・クリア数・メダルは上部の固定エリアに置く (スクロールしても見えるよう、小さめに表示) */
+.pt-top .hero{margin:7px 0 0;padding:6px 10px 7px;border-radius:12px;box-shadow:none}
+.pt-top .hero-row{gap:10px}
+.pt-top .hero-lv b{font-size:30px}
+.pt-top .hero-lv small{font-size:14px}
+.pt-top .hero-clear{margin-top:0;font-size:12.5px}
+.pt-top .hero-clear b{font-size:18px}
+.pt-top .medals{margin:5px -10px 0;padding:0 10px 1px;gap:4px}
+.pt-top .medals span{font-size:12px;padding:1px 6px 1px 2px}
+.pt-top .medals img{width:19px;height:19px}
+.pt-top .hero .pt-bar{margin-top:5px;height:5px}
+.pt-wrap > .bn-group:first-of-type,.pt-wrap > .pt-group:first-of-type{margin-top:10px}
 .pt-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;font-size:11px;color:var(--sub)}
 .pt-head b{font-size:15px;font-weight:900;color:var(--ink);white-space:nowrap;flex:none}
 .pt-head span{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -670,9 +682,9 @@ function render(state) {
         <button data-v="banner" class="${view === "banner" ? "on" : ""}">バナー</button>
         <button data-v="compact" class="${view === "compact" ? "on" : ""}">コンパクト</button>
       </div>
+      ${heroHTML(lv, rows, store)}
     </div>
     <div class="pt-wrap${view === "compact" ? " compact" : ""}" style="padding-top:0">
-      ${heroHTML(lv, rows, store)}
       ${store?.levels?.[lv] ? "" : `<div class="pt-sum" style="margin-top:10px">Lv${lv} のプレイデータがまだありません。下の「データを更新」を押してください。</div>`}
       ${groups}
       ${missHTML}
