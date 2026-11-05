@@ -451,8 +451,8 @@ body.pt{background:var(--bg);background-image:none}
 .c-逆詐称{background:#4a87c0}.c-個人差{background:#8b8e98}.c-未評価{background:#b3ada3}.c-ソフラン{background:#3a3f52}
 .bn-label{border:0;box-shadow:none;border-radius:9px}
 .bn-medal{border-width:1.5px;border-color:#e3e0da}
-.bn-banner{background:linear-gradient(115deg,var(--c1) 0%,var(--c1) 45%,var(--c2) 100%);box-shadow:0 1px 2px rgba(0,0,0,.18)}
-.bn-banner::after{background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 45%,rgba(0,0,0,.22))}
+.bn-banner{background:linear-gradient(90deg,var(--c1) 0%,var(--c2) 50%,var(--c3) 100%);box-shadow:0 1px 2px rgba(0,0,0,.18)}
+.bn-banner::after{background:linear-gradient(180deg,rgba(255,255,255,.12),transparent 40%)}
 .bn-foot{color:var(--ink)}
 .bn-genre{text-shadow:-1px -1px 0 rgba(0,0,0,.5),1px -1px 0 rgba(0,0,0,.5),-1px 1px 0 rgba(0,0,0,.5),1px 1px 0 rgba(0,0,0,.5);color:#fff}
 .bn-label{position:relative;top:auto;align-self:stretch;padding:0}
@@ -526,9 +526,10 @@ async function loadBannerColors() {
 }
 function bannerStyle(title) {
   const c = BANNER_COLORS[norm(title)];
-  if (c) return `--c1:${c[0]};--c2:${c[1]}`;
+  // 色データは [左, 中央, 右] の3色 (古い2色形式にも対応)
+  if (c) return `--c1:${c[0]};--c2:${c[1]};--c3:${c[2] || c[1]}`;
   const h = hueOf(title);
-  return `--c1:hsl(${h} 38% 58%);--c2:hsl(${(h + 30) % 360} 34% 42%)`;
+  return `--c1:hsl(${h} 38% 58%);--c2:hsl(${(h + 15) % 360} 36% 52%);--c3:hsl(${(h + 30) % 360} 34% 46%)`;
 }
 
 function tileHTML(r, showCat) {
