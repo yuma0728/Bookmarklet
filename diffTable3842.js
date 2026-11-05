@@ -18,7 +18,8 @@ try {
 const PLAY_DATA_URL =
   "https://p.eagate.573.jp/game/popn/popn29/playdata/mu_lv.html?version=-1&bemani=0&category=0&keyword=&sort=&sort_type=up&";
 const CSV_PATH = "/list/popn3842.csv";
-const LEVELS = [38, 39, 40, 41, 42];
+const LEVELS = [36, 37, 38, 39, 40, 41, 42, 43, 44, 45];
+const COLORS_PATH = "/list/banner_colors.json";
 
 const STORE_KEY = "popn3842_playdata";
 const SETTINGS_KEY = "popn3842_settings";
@@ -417,6 +418,45 @@ details.pt-miss li{margin:3px 0}
 .pt-msg .err{color:#dc2626;font-weight:700}
 .pt-prog{height:6px;background:#e3e5ea;border-radius:3px;overflow:hidden;margin:14px auto 0;max-width:260px}
 .pt-prog i{display:block;height:100%;background:var(--accent);transition:width .2s}
+
+/* ---- 配色テーマ (上の指定を上書き) ---- */
+:root{--bg:#f2f0ec;--card:#fff;--ink:#262b3a;--sub:#80838e;--line:#e3e0da;--accent:#ef5b7c}
+body.pt{background:var(--bg);background-image:none}
+.pt-top{background:rgba(242,240,236,.94);border-bottom:1px solid var(--line);padding-bottom:6px}
+.pt-tabs{grid-template-columns:repeat(10,1fr);gap:2px;background:#e4e1db;padding:3px;border-radius:10px}
+.pt-tabs button{padding:8px 0;font-size:14px;font-variant-numeric:tabular-nums;border-radius:7px}
+.pt-tabs button.on{background:var(--ink);color:#fff;box-shadow:none}
+.pt-filter{gap:5px;margin-top:6px}
+.pt-filter button{font-size:12.5px;padding:6px 0;border-color:var(--line);color:var(--sub)}
+.pt-filter button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pt-view{margin-top:6px;gap:0;justify-content:center}
+.pt-view button{border-radius:0;padding:4px 14px;border-color:var(--line)}
+.pt-view button:first-child{border-radius:7px 0 0 7px}
+.pt-view button:last-child{border-radius:0 7px 7px 0;border-left:0}
+.pt-view button.on{background:var(--ink);border-color:var(--ink)}
+.hero{margin:10px 0 0;padding:12px 14px;background:var(--card);border:0;border-radius:16px;box-shadow:0 1px 3px rgba(38,43,58,.06)}
+.hero-row{align-items:center}
+.hero-lv{color:var(--ink);text-shadow:none;display:flex;align-items:baseline;gap:2px;line-height:1}
+.hero-lv small{display:inline;font-size:18px;font-weight:800;letter-spacing:0;color:var(--ink)}
+.hero-lv b{font-size:46px;font-weight:900}
+.hero-title{color:var(--sub);font-size:12px;font-weight:700;letter-spacing:.02em}
+.hero-date{color:var(--sub);font-size:11px}
+.hero-clear{color:var(--ink);font-size:13px;margin-top:3px}
+.hero-clear b{font-size:22px;color:var(--accent)}
+.medals{margin:10px -14px 0;padding:0 14px 2px;gap:5px}
+.medals span{background:var(--bg);border:0;border-radius:8px;padding:2px 7px 2px 3px;color:var(--ink)}
+.medals span.tot{background:var(--bg);color:var(--sub);font-weight:700;font-size:12px;padding:2px 9px}
+.hero .pt-bar{border:0;height:7px;background:#e8e5df}
+.c-詐称{background:#7a5bbf}.c-強{background:#d65a6e}.c-中{background:#dd9a43}.c-弱{background:#4d9e7c}
+.c-逆詐称{background:#4a87c0}.c-個人差{background:#8b8e98}.c-未評価{background:#b3ada3}.c-ソフラン{background:#3a3f52}
+.bn-label{border:0;box-shadow:none;border-radius:9px}
+.bn-medal{border-width:1.5px;border-color:#e3e0da}
+.bn-banner{background:linear-gradient(115deg,var(--c1) 0%,var(--c1) 45%,var(--c2) 100%);box-shadow:0 1px 2px rgba(0,0,0,.18)}
+.bn-banner::after{background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 45%,rgba(0,0,0,.22))}
+.bn-foot{color:var(--ink)}
+.bn-genre{text-shadow:-1px -1px 0 rgba(0,0,0,.5),1px -1px 0 rgba(0,0,0,.5),-1px 1px 0 rgba(0,0,0,.5),1px 1px 0 rgba(0,0,0,.5);color:#fff}
+.bn-label{position:relative;top:auto;align-self:stretch;padding:0}
+.bn-in{position:sticky;top:var(--toph,150px);display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0}
 `;
 
 const LAMP_COLOR = {
@@ -427,7 +467,7 @@ const LAMP_COLOR = {
 function setupPage() {
   document.head.innerHTML =
     '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">' +
-    "<title>ポップン難易度表 Lv38-42</title>" +
+    "<title>ポップン難易度表</title>" +
     // iPhoneは標準の丸ゴシック(ヒラギノ丸ゴ)を使う。Android等ではWebフォントの丸ゴシックで代用
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@800;900&display=swap">';
   const st = document.createElement("style");
@@ -471,6 +511,26 @@ function hueOf(s) {
   return h % 360;
 }
 
+// バナーの色: list/banner_colors.json (実際のバナー画像から抽出した2色) があればそれを使う。
+// 無い曲は曲名から決めた落ち着いた色で代用する
+let BANNER_COLORS = {};
+async function loadBannerColors() {
+  try {
+    const res = await fetch(BASE_URL + COLORS_PATH + "?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    const raw = await res.json();
+    for (const [k, v] of Object.entries(raw)) BANNER_COLORS[norm(k)] = v;
+  } catch (e) {
+    console.warn("バナー色データを読み込めませんでした", e);
+  }
+}
+function bannerStyle(title) {
+  const c = BANNER_COLORS[norm(title)];
+  if (c) return `--c1:${c[0]};--c2:${c[1]}`;
+  const h = hueOf(title);
+  return `--c1:hsl(${h} 38% 58%);--c2:hsl(${(h + 30) % 360} 34% 42%)`;
+}
+
 function tileHTML(r, showCat) {
   const lamp = lampOf(r);
   const medal = r.found && r.medal ? `<img src="${BASE_URL}/icon/c_${r.medal}.png" alt="">` : "";
@@ -482,7 +542,7 @@ function tileHTML(r, showCat) {
   const cat = showCat ? `<span class="bn-cat c-${r.category}">${r.category}</span>` : "";
   return `<div class="bn l-${lamp}">
     <div class="bn-top"><div class="bn-medal">${medal}</div>
-      <div class="bn-banner pop" style="--h:${hueOf(r.title)}">
+      <div class="bn-banner pop" style="${bannerStyle(r.title)}">
         <span class="bn-genre">${esc(r.genre)}</span>${r.type ? `<span class="bn-type ${r.type}">${r.type}</span>` : ""}${cat}
         <span class="bn-title">${esc(r.title)}</span></div></div>
     <div class="bn-foot">${foot}<i class="bn-lamp" style="background:${lampColor}"></i></div></div>`;
@@ -493,7 +553,7 @@ function bannerGroupHTML(key, label, rows, filter, settings, showCat) {
   const shown = rows.filter((r) => passFilter(r, filter));
   const closed = settings.collapsed[key] ? " closed" : "";
   return `<section class="bn-group${closed}" data-key="${esc(key)}">
-    <div class="bn-label c-${label} pop"><span class="vt">${label}</span><small>${cleared}/${rows.length}</small></div>
+    <div class="bn-label c-${label} pop"><div class="bn-in"><span class="vt">${label}</span><small>${cleared}/${rows.length}</small></div></div>
     <div class="bn-grid">${shown.length ? shown.map((r) => tileHTML(r, showCat)).join("") : `<div class="pt-empty" style="grid-column:1/-1">該当する曲はありません</div>`}</div>
   </section>`;
 }
@@ -505,21 +565,23 @@ function heroHTML(lv, rows, store) {
   let strip = "", bar = "";
   if (has) {
     const mc = Array(13).fill(0);
-    let noplay = 0;
+    let nomedal = 0;
     for (const r of rows) {
       if (r.found && r.medal) mc[r.medal]++;
-      else noplay++;
+      else nomedal++;
     }
+    // 獲得しているメダルだけを表示する
     strip = `<div class="medals">` +
-      [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((m) => `<span><img src="${BASE_URL}/icon/c_${m}.png" alt="">${mc[m]}</span>`).join("") +
-      `<span>未 ${noplay}</span><span class="tot">/ ${total}</span></div>`;
+      [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].filter((m) => mc[m] > 0)
+        .map((m) => `<span><img src="${BASE_URL}/icon/c_${m}.png" alt="">${mc[m]}</span>`).join("") +
+      `<span class="tot">メダルなし ${nomedal}</span></div>`;
     const counts = {};
     for (const r of rows) { const l = lampOf(r); counts[l] = (counts[l] || 0) + 1; }
     bar = `<div class="pt-bar">` + LAMPS.map((l) => (counts[l.id] ? `<i style="width:${(counts[l.id] / total) * 100}%;background:${LAMP_COLOR[l.id]}"></i>` : "")).join("") + `</div>`;
   }
   return `<div class="hero pop">
     <div class="hero-row">
-      <div class="hero-lv"><small>LEVEL</small><b>${lv}</b></div>
+      <div class="hero-lv"><small>Lv</small><b>${lv}</b></div>
       <div class="hero-txt"><div class="hero-title">pop'n music 難易度表</div>
         <div class="hero-date">データ取得 ${esc(formatDate(store?.timestamps?.[lv]))}</div>
         <div class="hero-clear">${has ? `クリア <b>${cleared}</b> / ${total}（${total ? ((cleared / total) * 100).toFixed(1) : "0.0"}%）` : "プレイデータ未取得"}</div></div>
@@ -527,6 +589,7 @@ function heroHTML(lv, rows, store) {
 }
 
 function passFilter(r, filter) {
+  if (filter === "cleared") return isCleared(r.medal);
   if (filter === "notclear") return !isCleared(r.medal);
   if (filter === "noplay") return lampOf(r) === "noplay" || !r.found;
   return true;
@@ -575,7 +638,7 @@ function render(state) {
   normal.sort(byDifficulty);
   soflan.sort(byDifficulty);
 
-  const view = settings.view || "banner";
+  const view = settings.view === "compact" ? "compact" : "banner";
   const gfn = view === "banner" ? bannerGroupHTML : groupHTML;
   let groups = "";
   for (const c of CATEGORIES) {
@@ -594,15 +657,13 @@ function render(state) {
   const f = settings.filter;
   document.body.innerHTML = `
     <div class="pt-top">
-      <div class="pt-tabs" style="margin-top:0">${LEVELS.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">Lv${l}</button>`).join("")}</div>
+      <div class="pt-tabs">${LEVELS.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">${l}</button>`).join("")}</div>
       <div class="pt-filter">
-        <button data-f="all" class="${f === "all" ? "on" : ""}">すべて</button>
-        <button data-f="notclear" class="${f === "notclear" ? "on" : ""}">未クリアのみ</button>
-        <button data-f="noplay" class="${f === "noplay" ? "on" : ""}">未プレイのみ</button>
+        ${[["all", "すべて"], ["cleared", "クリア済み"], ["notclear", "未クリア"], ["noplay", "未プレイ"]]
+          .map(([k, t]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${t}</button>`).join("")}
       </div>
-      <div class="pt-view">表示
+      <div class="pt-view">
         <button data-v="banner" class="${view === "banner" ? "on" : ""}">バナー</button>
-        <button data-v="list" class="${view === "list" ? "on" : ""}">詳細</button>
         <button data-v="compact" class="${view === "compact" ? "on" : ""}">コンパクト</button>
       </div>
     </div>
@@ -614,7 +675,7 @@ function render(state) {
     </div>
     <div class="pt-foot">
       <button class="pt-btn primary" data-act="update-lv">Lv${lv} のデータを更新</button>
-      <button class="pt-btn" data-act="update-all">全Lv(38～42)のデータを更新</button>
+      <button class="pt-btn" data-act="update-all">全Lv(${LEVELS[0]}～${LEVELS[LEVELS.length - 1]})のデータを更新</button>
       <div class="pt-meta">難易度表: list/popn3842.csv ／ 全${LEVELS.reduce((a, l) => a + (table[l]?.length || 0), 0)}曲</div>
     </div>`;
 
@@ -681,6 +742,7 @@ export default async (options = {}) => {
     setupPage();
     showMessage("難易度表を読み込み中・・・");
     const table = await loadTable();
+    await loadBannerColors();
     const settings = loadSettings();
     if (!LEVELS.includes(settings.lv)) settings.lv = LEVELS[0];
     const state = { table, settings, store: loadPlayData(), mock: options.mock || null };
