@@ -21,9 +21,9 @@ const STORE_VER = 1;
 const FETCH_BATCH_INTERVAL_MS = 600; // 公式サイト負荷軽減のため、1ページごとに待つ時間
 
 const PURPOSES = [
-  { id: "normal", label: "ノマゲ以下", goal: 2, goalLabel: "ノマゲ以下" }, // ASSIST以上
-  { id: "hard", label: "ハード", goal: 5, goalLabel: "HARD" },
-  { id: "exhard", label: "エクハ", goal: 6, goalLabel: "EX HARD" },
+  { id: "normal", label: "NORMAL以下", goal: 2, goalLabel: "NORMAL以下" }, // ASSIST CLEAR以上で達成
+  { id: "hard", label: "HARD", goal: 5, goalLabel: "HARD" },
+  { id: "exhard", label: "EX HARD", goal: 6, goalLabel: "EX HARD" },
 ];
 
 // クリアランプ: 公式サイトの clflg0～7 に対応
@@ -591,7 +591,7 @@ function passFilter(c, filter, goal) {
 
 function render(state) {
   const { data, store, settings } = state;
-  // ☆を先に選び、その☆にある目的 (ノマゲ以下/ハード/エクハ) から選ぶ
+  // ☆を先に選び、その☆にある目的 (NORMAL以下/HARD/EX HARD) から選ぶ
   const levels = state.allLevels;
   if (!levels.includes(settings.level)) settings.level = levels[levels.length - 1];
   const available = PURPOSES.filter((p) => data.tables.some((t) => t.purpose === p.id && t.level === settings.level));
