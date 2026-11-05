@@ -99,8 +99,11 @@ function gameVersion() {
   const m = location.pathname.match(/\/game\/2dx\/(\d+)\//);
   return m ? parseInt(m[1], 10) : DEFAULT_VERSION;
 }
+// 動作確認用: PC上の模擬サーバー (localhost) で動かしたときだけ、そのサーバーを公式サイトの代わりに使う
+const IS_LOCAL_TEST = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const SITE_ORIGIN = IS_LOCAL_TEST ? location.origin : "https://p.eagate.573.jp";
 function baseURL() {
-  return `https://p.eagate.573.jp/game/2dx/${gameVersion()}/djdata/music/difficulty.html`;
+  return `${SITE_ORIGIN}/game/2dx/${gameVersion()}/djdata/music/difficulty.html`;
 }
 // 1ページ目は公式サイトの「楽曲閲覧」ボタンと同じ送り方 (POST) で開く
 async function fetchDoc(url, form) {
@@ -193,23 +196,127 @@ function diagnosis(doc) {
   return out.join("\n");
 }
 class ReadError extends Error {
-  constructor(message, doc) {
+  constructor(message, doc, log) {
     super(message);
-    this.diag = diagnosis(doc);
+    this.diag = (log && log.length ? `[試した方法]\n  ${log.join("\n  ")}\n` : "") + diagnosis(doc);
   }
 }
+// ---- 公式サイトの検索フォーム ----
+// ページに書かれている「楽曲閲覧」フォームを読み、指定Lv・SPを選んだ状態の送信内容を作る
+function formFields(doc, level) {
+  const form = doc.querySelector("#series-select form") || Array.from(doc.querySelectorAll("form")).find((f) => f.querySelector('select[name="difficult"]'));
+  if (!form) return null;
+  const fields = {};
+  for (const el of form.querySelectorAll("input[name], select[name]")) {
+    if (el.type === "submit") continue;
+    if (el.tagName === "SELECT") {
+      const opts = Array.from(el.options);
+      let pick = null;
+      if (el.name === "difficult") pick = opts.find((o) => new RegExp(`LEVEL\\s*${level}$`, "i").test(o.textContent.trim()));
+      if (el.name === "style") pick = opts.find((o) => /^SP$/i.test(o.textContent.trim()));
+      fields[el.name] = (pick || opts.find((o) => o.selected) || opts[0] || {}).value ?? "";
+    } else {
+      fields[el.name] = el.value;
+    }
+  }
+  return { action: form.getAttribute("action") || baseURL(), method: (form.getAttribute("method") || "GET").toUpperCase(), fields };
+}
+async function templateForm(level) {
+  // ブックマークを開いたページにフォームがあればそれを使い、無ければ検索ページを開いて読む
+  const L = window.__dxLaunch;
+  let f = L ? formFields(new DOMParser().parseFromString(L.html, "text/html"), level) : null;
+  if (!f) f = formFields(await fetchDoc(baseURL()), level);
+  return f;
+}
+
+// ---- 見えない枠 (iframe) でページを開く ----
+// 通常の読み込み (fetch) で公式サイトが曲を返さない場合に使う。利用者が自分で「楽曲閲覧」やNEXTを押すのと同じ開き方になる
+let loaderFrame = null;
+function getFrame() {
+  if (!loaderFrame || !loaderFrame.isConnected) {
+    loaderFrame = document.createElement("iframe");
+    loaderFrame.name = "dxloader";
+    loaderFrame.setAttribute("sandbox", "allow-same-origin allow-forms"); // ページ内のスクリプトや広告は動かさない
+    loaderFrame.style.cssText = "position:fixed;left:-10px;top:-10px;width:1px;height:1px;border:0;opacity:0";
+    document.documentElement.appendChild(loaderFrame); // bodyの書き換えで消えないよう、bodyの外に置く
+  }
+  return loaderFrame;
+}
+function frameLoad(start) {
+  const fr = getFrame();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { fr.onload = null; reject(new Error("ページの読み込みがタイムアウトしました")); }, 25000);
+    fr.onload = () => {
+      clearTimeout(timer);
+      fr.onload = null;
+      try {
+        const d = fr.contentDocument;
+        if (!d || !d.body) throw new Error("empty");
+        resolve(d);
+      } catch (e) {
+        reject(new Error("公式サイトのページを枠の中で開けませんでした"));
+      }
+    };
+    start(fr);
+  });
+}
+function frameSubmit(f) {
+  return frameLoad(() => {
+    const form = document.createElement("form");
+    form.method = f.method;
+    form.action = new URL(f.action, baseURL()).href;
+    form.target = "dxloader";
+    for (const [k, v] of Object.entries(f.fields)) {
+      const i = document.createElement("input");
+      i.type = "hidden"; i.name = k; i.value = v;
+      form.appendChild(i);
+    }
+    document.documentElement.appendChild(form);
+    form.submit();
+    form.remove();
+  });
+}
+function frameOpen(url) {
+  return frameLoad((fr) => { fr.src = url; });
+}
+
+// 1つのLvの1ページ目を開く。うまくいく方法が見つかるまで順に試し、試した結果を記録する
+let loadMode = null; // "fetch" か "frame" (一度うまくいった方法を以降も使う)
+async function openFirstPage(level, log) {
+  const f = await templateForm(level);
+  log.push(f ? `フォーム: ${f.method} ${JSON.stringify(f.fields)}` : "フォーム: 見つからず");
+  const tries = [];
+  if (loadMode !== "frame") {
+    if (f) tries.push(["fetch(フォーム)", () => fetchDoc(new URL(f.action, baseURL()).href, f.method === "POST" ? f.fields : null), "fetch"]);
+    tries.push(["fetch(アドレス)", () => fetchDoc(`${baseURL()}?difficult=${level - 1}&style=0&disp=1&offset=0`), "fetch"]);
+  }
+  if (f) tries.push(["枠(フォーム)", () => frameSubmit(f), "frame"]);
+  tries.push(["枠(アドレス)", () => frameOpen(`${baseURL()}?difficult=${level - 1}&style=0&disp=1&offset=0`), "frame"]);
+  let last = null;
+  for (const [name, run, mode] of tries) {
+    try {
+      const doc = await run();
+      const r = parseDoc(doc);
+      const msg = /データがみつかりません/.test(doc.body?.textContent || "") ? " (データがみつかりません)" : "";
+      log.push(`${name}: 曲${r ? r.rows.length : 0}${msg}`);
+      last = doc;
+      if (r && r.rows.length) { loadMode = mode; return doc; }
+    } catch (e) {
+      log.push(`${name}: エラー ${e.message}`);
+    }
+    await sleep(FETCH_BATCH_INTERVAL_MS);
+  }
+  throw new ReadError(last ? explainPage(last) : "公式サイトのページを開けませんでした。", last, log);
+}
+
 async function fetchLevel(level, progress) {
   const all = [];
-  let doc = await fetchDoc(baseURL(), { difficult: String(level - 1), style: "0", disp: "1" });
-  // POSTで曲が出なければ、NEXTリンクと同じ形式 (アドレス指定) でも試す
-  if (!parseDoc(doc)?.rows.length) {
-    await sleep(FETCH_BATCH_INTERVAL_MS);
-    doc = await fetchDoc(`${baseURL()}?difficult=${level - 1}&style=0&disp=1&offset=0`);
-  }
+  const log = [];
+  let doc = await openFirstPage(level, log);
   for (let page = 0; page < 40; page++) {
     const r = parseDoc(doc);
     if (!r || !r.rows.length) {
-      if (page === 0) throw new ReadError(explainPage(doc), doc);
+      if (page === 0) throw new ReadError(explainPage(doc), doc, log);
       break;
     }
     if (page === 0 && r.level && (r.level !== level || r.style !== "SP")) {
@@ -221,12 +328,12 @@ async function fetchLevel(level, progress) {
     await sleep(FETCH_BATCH_INTERVAL_MS);
     // 次のページは、公式サイトの「NEXT」リンクのアドレスをそのまま使う
     const nextURL = r.nextURL ? new URL(r.nextURL, baseURL()).href : `${baseURL()}?difficult=${level - 1}&style=0&disp=1&offset=${(page + 1) * 50}`;
-    doc = await fetchDoc(nextURL);
+    doc = loadMode === "frame" ? await frameOpen(nextURL) : await fetchDoc(nextURL);
   }
   return all;
 }
 async function updatePlayData(levels, mock, progress) {
-  if (!mock && location.hostname !== "p.eagate.573.jp") {
+  if (!mock && !IS_LOCAL_TEST && location.hostname !== "p.eagate.573.jp") {
     throw new Error(`IIDXの公式サイト（p.eagate.573.jp）のページを開いた状態でブックマークを実行してください。\n今開いているページ: ${location.hostname}`);
   }
   const store = loadPlayData() || { levels: {}, timestamps: {} };
