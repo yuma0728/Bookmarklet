@@ -382,7 +382,23 @@ function makeIndex(rows) {
     add(byTitle, norm(r.title), r);
     add(byLoose, loose(r.title), r);
   }
-  return { exact, byTitle, byLoose };
+  return { exact, byTitle, byLoose, rows: (rows || []).map((r) => ({ r, k: loose(r.title) })) };
+}
+// 2つの文字列が何文字違うか (編集距離)
+function editDistance(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      best = Math.min(best, cur[j]);
+    }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
 }
 function findRow(idx, title, chart) {
   const e = idx.exact.get(norm(title) + "|" + chart);
@@ -391,9 +407,20 @@ function findRow(idx, title, chart) {
     if (!list) continue;
     const c = list.find((r) => r.chart === chart);
     if (c) return c;
-    if (list.length === 1 || !chart) return list[0];
+    if (!chart) return list[0];
   }
-  return null;
+  // 1～2文字だけ違う曲名 (打ち間違い・記号や文字の違い) は同じ曲とみなす。候補が1つに絞れるときだけ
+  const k = loose(title);
+  if (k.length < 4) return null;
+  const max = k.length <= 8 ? 1 : 2;
+  let best = null, bestD = max + 1, tie = false;
+  for (const { r, k: rk } of idx.rows) {
+    if (chart && r.chart !== chart) continue;
+    const d = editDistance(k, rk, max);
+    if (d < bestD) { best = r; bestD = d; tie = false; }
+    else if (d === bestD) tie = true;
+  }
+  return best && !tie ? best : null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -510,7 +537,7 @@ function cellHTML(c, goal) {
   const done = r && lamp >= goal;
   const info = r
     ? `${r.dj ? `<span>${r.dj}</span>` : ""}${r.score ? `<span>${r.score}</span>` : ""}`
-    : `<span>記録なし</span>`;
+    : `<span>未取得</span>`;
   return `<div class="cell l${lamp}${r ? "" : " nd"}${done ? " done" : ""}" style="--lc:${L.color};--lbg:${L.bg}">
     <div class="lb"></div>
     <div class="ct"><div class="t">${esc(c.t)}</div>
@@ -543,7 +570,13 @@ function render(state) {
   // 譜面ごとにプレイデータを紐付け (記録が無いLvは全譜面をNO PLAYとして扱う)
   const groups = table.groups.map((g) => ({
     ...g,
-    charts: g.charts.map(([t, chart, option]) => ({ t, chart, option, row: noRecord ? NOPLAY : played ? findRow(idx, t, chart) : null })),
+    charts: g.charts.map(([t, chart, option]) => {
+      if (noRecord) return { t, chart, option, row: NOPLAY };
+      if (!played) return { t, chart, option, row: null };
+      const row = findRow(idx, t, chart);
+      // 公式データに見つからない譜面は NO PLAY として表示し、一覧で確認できるよう印を付けておく
+      return { t, chart, option, row: row || NOPLAY, unmatched: !row };
+    }),
   }));
   const all = groups.flatMap((g) => g.charts);
   const goal = purpose.goal;
@@ -598,10 +631,10 @@ function render(state) {
     </section>`;
   }).join("");
 
-  const missing = played ? all.filter((c) => !c.row) : [];
+  const missing = all.filter((c) => c.unmatched);
   const missHTML = missing.length
-    ? `<details class="miss"><summary>公式データと照合できなかった譜面 (${missing.length})</summary>
-        <div style="margin-top:6px">まだプレイしていない譜面か、難易度表と公式サイトで曲名の表記が違う譜面です。プレイ済みなのにここに出る譜面があれば、曲名の表記違いです。</div>
+    ? `<details class="miss"><summary>公式データに見つからなかった譜面 (${missing.length})</summary>
+        <div style="margin-top:6px">表では NO PLAY として表示しています。プレイ済みなのにここに出ている譜面は、難易度表と公式サイトで曲名の書き方が違う譜面です。</div>
         <ul>${missing.map((c) => `<li>${esc(c.t)} <span style="color:#7f838d">${c.chart ? CHART_NAME[c.chart] : ""}</span></li>`).join("")}</ul></details>`
     : "";
 
