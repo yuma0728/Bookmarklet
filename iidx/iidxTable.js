@@ -455,6 +455,8 @@ button{font-family:inherit}
 .hero-lv{display:flex;flex-direction:column;align-items:center}
 .hero-p{font-size:12px;font-weight:800;color:var(--sub);margin-top:3px;letter-spacing:.02em}
 .sorter{display:flex;justify-content:center;margin-top:6px}
+.note{margin-top:5px;text-align:center;font-size:10.5px;color:var(--sub);font-weight:700}
+.note .op{color:#c2410c;font-weight:900}
 .sorter button{border:1px solid var(--line);background:#fff;padding:4px 14px;font-size:12px;color:var(--sub)}
 .sorter button:first-child{border-radius:7px 0 0 7px}
 .sorter button:last-child{border-radius:0 7px 7px 0;border-left:0}
@@ -636,11 +638,13 @@ function render(state) {
   // ここに出るのは、曲名の書き方が違う譜面か、この難易度表に載っていない譜面だけ
   const used = new Set(all.map((c) => c.row));
   const orphans = noRecord || !played ? [] : played.filter((r) => !used.has(r) && /^[NHAL]$/.test(r.chart));
-  const missHTML = orphans.length
-    ? `<details class="miss"><summary>表と結びつかなかった公式データ (${orphans.length})</summary>
+  const missHTML = !played || noRecord
+    ? ""
+    : orphans.length
+    ? `<details class="miss"><summary>表と結びつかなかった公式データ：${orphans.length}件</summary>
         <div style="margin-top:6px">公式サイトにプレイ記録があるのに、この難易度表のどの譜面とも結びつかなかった譜面です。曲名の書き方が違うか、この表に載っていない譜面です。</div>
         <ul>${orphans.map((r) => `<li>${esc(r.title)} <span style="color:#7f838d">${CHART_NAME[r.chart] || ""} / ${LAMPS[r.lamp].short}</span></li>`).join("")}</ul></details>`
-    : "";
+    : `<div class="miss" style="font-weight:800;color:#7f838d">表と結びつかなかった公式データ：0件（公式サイトの記録はすべて表と結びつきました）</div>`;
 
   document.body.innerHTML = `
     <div class="top">
@@ -652,6 +656,7 @@ function render(state) {
       }).join("")}</div>
       <div class="chips">${[["all", "すべて"], ["done", "達成済み"], ["notdone", "未達成"], ["noplay", "未プレイ"]].map(([k, t]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${t}</button>`).join("")}</div>
       <div class="sorter"><button data-o="hard" class="${!easyFirst ? "on" : ""}">難しい順</button><button data-o="easy" class="${easyFirst ? "on" : ""}">簡単順</button></div>
+      <div class="note"><span class="op">※</span> が付いた譜面は、正規・MIRROR以外のオプション推奨</div>
     </div>
     <div class="wrap">
       <div class="hero"><div class="hero-row">
@@ -668,7 +673,7 @@ function render(state) {
     <div class="foot">
       <button class="btn primary" data-act="lv">☆${lv} のデータを更新</button>
       <button class="btn" data-act="all">全☆(${state.allLevels.join("・")})のデータを更新</button>
-      <div class="meta">難易度表: ${esc(table.source)}<br>※ = 正規・鏡以外のオプション推奨</div>
+      <div class="meta">難易度表: ${esc(table.source)}</div>
     </div>`;
 
   const top = document.querySelector(".top");
