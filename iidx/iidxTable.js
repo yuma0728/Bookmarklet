@@ -455,6 +455,19 @@ button{font-family:inherit}
 .hero-lv{display:flex;flex-direction:column;align-items:center}
 .hero-p{font-size:12px;font-weight:800;color:var(--sub);margin-top:3px;letter-spacing:.02em}
 .sorter{display:flex;justify-content:center;margin-top:6px}
+/* ☆・達成数・ランプの内訳は上部の固定エリアに置く (スクロールしても見えるよう、小さめに表示) */
+.top .hero{margin-top:7px;padding:6px 10px 7px;border-radius:12px;box-shadow:none}
+.top .hero-row{gap:10px}
+.top .hero-lv{flex-direction:row;align-items:baseline;gap:6px}
+.top .hero-lv b{font-size:28px}
+.top .hero-lv small{font-size:13px}
+.top .hero-p{margin-top:0;font-size:11px}
+.top .hero-c{margin-top:0;font-size:12px}
+.top .hero-c b{font-size:17px}
+.top .lamps{flex-wrap:nowrap;overflow-x:auto;margin:5px -10px 0;padding:0 10px 1px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.top .lamps::-webkit-scrollbar{display:none}
+.top .lamps span{flex:none;font-size:11px;padding:1px 6px}
+.top .bar{margin-top:5px;height:5px}
 .note{margin-top:5px;text-align:center;font-size:10.5px;color:var(--sub);font-weight:700}
 .note .op{color:#c2410c;font-weight:900}
 .sorter button{border:1px solid var(--line);background:#fff;padding:4px 14px;font-size:12px;color:var(--sub)}
@@ -698,8 +711,6 @@ function render(state) {
       <div class="chips">${[["all", "すべて"], ["done", "達成済み"], ["notdone", "未達成"], ["noplay", "未プレイ"]].map(([k, t]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${t}</button>`).join("")}</div>
       <div class="sorter"><button data-o="hard" class="${!easyFirst ? "on" : ""}">難しい順</button><button data-o="easy" class="${easyFirst ? "on" : ""}">簡単順</button></div>
       <div class="note"><span class="op">※</span> が付いた譜面は、正規・MIRROR以外のオプション推奨</div>
-    </div>
-    <div class="wrap">
       <div class="hero"><div class="hero-row">
         <div class="hero-lv"><div><small>☆</small><b>${lv}</b></div><div class="hero-p">${purpose.label}</div></div>
         <div class="hero-txt">
@@ -708,6 +719,8 @@ function render(state) {
         ${played ? "" : `<div style="margin-top:8px;font-size:12.5px;color:#7f838d">☆${lv} のプレイデータがまだありません。下の「データを更新」を押してください。</div>`}
         ${noRecord ? `<div style="margin-top:8px;font-size:12.5px;color:#7f838d">公式サイトに ☆${lv} のプレイ記録がありません（すべて NO PLAY として表示しています）。</div>` : ""}
       </div>
+    </div>
+    <div class="wrap">
       <div class="allbar"><button data-all="open">すべて開く</button><button data-all="close">すべて閉じる</button></div>
       ${groupsHTML}
       ${missHTML}
