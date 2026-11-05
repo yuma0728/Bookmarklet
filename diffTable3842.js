@@ -447,14 +447,15 @@ body.pt{background:var(--bg);background-image:none}
 .bn.l-noplay .bn-banner::after,.bn.l-nodata .bn-banner::after{background:rgba(242,240,236,.6)}
 .bn-genre{z-index:1}
 /* 曲名・ジャンル名: 薄い色のバナーの上でも読めるよう、太めの黒い縁取りと影を付ける */
-.bn-title{text-shadow:
-  1.5px 0 0 rgba(15,15,25,.9),-1.5px 0 0 rgba(15,15,25,.9),0 1.5px 0 rgba(15,15,25,.9),0 -1.5px 0 rgba(15,15,25,.9),
-  1px 1px 0 rgba(15,15,25,.9),-1px -1px 0 rgba(15,15,25,.9),1px -1px 0 rgba(15,15,25,.9),-1px 1px 0 rgba(15,15,25,.9),
-  0 0 4px rgba(0,0,0,.55)}
-.bn-genre{text-shadow:1px 0 0 rgba(15,15,25,.85),-1px 0 0 rgba(15,15,25,.85),0 1px 0 rgba(15,15,25,.85),0 -1px 0 rgba(15,15,25,.85),0 0 3px rgba(0,0,0,.5)}
+/* 曲名: 細めで薄めの縁取り (黒っぽくなりすぎないように) */
+.bn-title{font-size:11px;text-shadow:
+  1px 0 0 rgba(30,30,40,.6),-1px 0 0 rgba(30,30,40,.6),0 1px 0 rgba(30,30,40,.6),0 -1px 0 rgba(30,30,40,.6),
+  0 0 2px rgba(30,30,40,.35)}
+/* ジャンル名: 影なし */
+.bn-genre{text-shadow:none}
 .bn.l-noplay .bn-banner::after,.bn.l-nodata .bn-banner::after{background:rgba(242,240,236,.45)}
 /* 曲名の後ろ (バナーの下側) だけに薄い影を敷いて、白い曲名を読みやすくする */
-.bn-banner::before{content:"";position:absolute;left:0;right:0;bottom:0;height:58%;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.3));pointer-events:none}
+.bn-banner::before{content:"";position:absolute;left:0;right:0;bottom:0;height:58%;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.16));pointer-events:none}
 .bn-title{z-index:2}
 .hero{margin:10px 0 0;padding:12px 14px;background:var(--card);border:0;border-radius:16px;box-shadow:0 1px 3px rgba(38,43,58,.06)}
 .hero-row{align-items:center}
@@ -476,7 +477,7 @@ body.pt{background:var(--bg);background-image:none}
 .bn-banner{background:linear-gradient(90deg,var(--c1) 0%,var(--c2) 50%,var(--c3) 100%);box-shadow:0 1px 2px rgba(0,0,0,.18)}
 .bn-banner::after{background:linear-gradient(180deg,rgba(255,255,255,.12),transparent 40%)}
 .bn-foot{color:var(--ink)}
-.bn-genre{text-shadow:-1px -1px 0 rgba(0,0,0,.5),1px -1px 0 rgba(0,0,0,.5),-1px 1px 0 rgba(0,0,0,.5),1px 1px 0 rgba(0,0,0,.5);color:#fff}
+.bn-genre{text-shadow:none;color:#fff}
 /* Lv・クリア数・メダルは上部の固定エリアに置く (スクロールしても見えるよう、小さめに表示) */
 .pt-top .hero{margin:7px 0 0;padding:6px 10px 7px;border-radius:12px;box-shadow:none}
 .pt-top .hero-row{gap:10px}
