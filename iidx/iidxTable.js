@@ -292,27 +292,41 @@ async function openFirstPage(level, log) {
   }
   if (f) tries.push(["枠(フォーム)", () => frameSubmit(f), "frame"]);
   tries.push(["枠(アドレス)", () => frameOpen(`${baseURL()}?difficult=${level - 1}&style=0&disp=1&offset=0`), "frame"]);
-  let last = null;
+  // すでに他のLvで成功した方法があれば、まずその方法だけで試す
+  if (loadMode) tries.sort((a, b) => (a[2] === loadMode ? 0 : 1) - (b[2] === loadMode ? 0 : 1));
+  let last = null, allNoData = true;
   for (const [name, run, mode] of tries) {
     try {
       const doc = await run();
       const r = parseDoc(doc);
-      const msg = /データがみつかりません/.test(doc.body?.textContent || "") ? " (データがみつかりません)" : "";
-      log.push(`${name}: 曲${r ? r.rows.length : 0}${msg}`);
+      const noData = /データがみつかりません/.test(doc.body?.textContent || "");
+      log.push(`${name}: 曲${r ? r.rows.length : 0}${noData ? " (データがみつかりません)" : ""}`);
       last = doc;
       if (r && r.rows.length) { loadMode = mode; return doc; }
+      if (!noData) allNoData = false;
+      // 実績のある方法で「データがみつかりません」なら、そのLvはプレイ記録が無いと判断する
+      if (noData && mode === loadMode) return null;
     } catch (e) {
       log.push(`${name}: エラー ${e.message}`);
+      allNoData = false;
     }
     await sleep(FETCH_BATCH_INTERVAL_MS);
   }
+  // どの方法でも「データがみつかりません」= そのLvのプレイ記録が公式サイトに無い
+  if (allNoData && last) return null;
   throw new ReadError(last ? explainPage(last) : "公式サイトのページを開けませんでした。", last, log);
 }
 
+let lastLog = [];
+// 戻り値: { rows, none } (none = そのLvのプレイ記録が公式サイトに無い)
 async function fetchLevel(level, progress) {
   const all = [];
-  const log = [];
+  const log = (lastLog = [`☆${level}`]);
   let doc = await openFirstPage(level, log);
+  if (!doc) {
+    progress(level, 1, false);
+    return { rows: [], none: true };
+  }
   for (let page = 0; page < 40; page++) {
     const r = parseDoc(doc);
     if (!r || !r.rows.length) {
@@ -330,17 +344,27 @@ async function fetchLevel(level, progress) {
     const nextURL = r.nextURL ? new URL(r.nextURL, baseURL()).href : `${baseURL()}?difficult=${level - 1}&style=0&disp=1&offset=${(page + 1) * 50}`;
     doc = loadMode === "frame" ? await frameOpen(nextURL) : await fetchDoc(nextURL);
   }
-  return all;
+  return { rows: all, none: false };
 }
 async function updatePlayData(levels, mock, progress) {
   if (!mock && !IS_LOCAL_TEST && location.hostname !== "p.eagate.573.jp") {
     throw new Error(`IIDXの公式サイト（p.eagate.573.jp）のページを開いた状態でブックマークを実行してください。\n今開いているページ: ${location.hostname}`);
   }
   const store = loadPlayData() || { levels: {}, timestamps: {} };
+  store.none = store.none || {};
+  const results = {};
   for (const lv of levels) {
-    store.levels[lv] = mock ? mock(lv) : await fetchLevel(lv, progress);
-    store.timestamps[lv] = Date.now();
+    results[lv] = mock ? { rows: mock(lv), none: false } : await fetchLevel(lv, progress);
     if (!mock) await sleep(FETCH_BATCH_INTERVAL_MS);
+  }
+  // 複数のLvをまとめて取得して、どれにも記録が無いのは不自然なので、読み取りの問題として知らせる
+  if (levels.length > 1 && levels.every((lv) => results[lv].none)) {
+    throw new ReadError("どの☆でも「データがみつかりません」と表示されました。読み取り方に問題がある可能性があります。", null, lastLog);
+  }
+  for (const lv of levels) {
+    store.levels[lv] = results[lv].rows;
+    store.none[lv] = results[lv].none;
+    store.timestamps[lv] = Date.now();
   }
   savePlayData(store);
   return store;
@@ -479,7 +503,7 @@ function cellHTML(c, goal) {
   const done = r && lamp >= goal;
   const info = r
     ? `${r.dj ? `<span>${r.dj}</span>` : ""}${r.score ? `<span>${r.score}</span>` : ""}`
-    : `<span>データなし</span>`;
+    : `<span>記録なし</span>`;
   return `<div class="cell l${lamp}${r ? "" : " nd"}${done ? " done" : ""}" style="--lc:${L.color};--lbg:${L.bg}">
     <div class="lb"></div>
     <div class="ct"><div class="t">${esc(c.t)}</div>
@@ -502,12 +526,14 @@ function render(state) {
   const table = data.tables.find((t) => t.purpose === purpose.id && t.level === settings.level);
   const lv = table.level;
   const played = store?.levels?.[lv];
+  const noRecord = !!store?.none?.[lv]; // 公式サイトにこのLvのプレイ記録が無い
   const idx = makeIndex(played);
+  const NOPLAY = { lamp: 0, dj: "", score: 0 };
 
-  // 譜面ごとにプレイデータを紐付け
+  // 譜面ごとにプレイデータを紐付け (記録が無いLvは全譜面をNO PLAYとして扱う)
   const groups = table.groups.map((g) => ({
     ...g,
-    charts: g.charts.map(([t, chart, option]) => ({ t, chart, option, row: played ? findRow(idx, t, chart) : null })),
+    charts: g.charts.map(([t, chart, option]) => ({ t, chart, option, row: noRecord ? NOPLAY : played ? findRow(idx, t, chart) : null })),
   }));
   const all = groups.flatMap((g) => g.charts);
   const goal = purpose.goal;
@@ -520,7 +546,7 @@ function render(state) {
   const order = [7, 6, 5, 4, 3, 2, 1, 0];
   const lampChips = played
     ? order.filter((i) => counts[i] > 0).map((i) => `<span><i style="background:${LAMPS[i].color}"></i>${LAMPS[i].short} ${counts[i]}</span>`).join("") +
-      (nodata ? `<span><i style="background:#fff;border:1px solid #ccc"></i>データなし ${nodata}</span>` : "")
+      (nodata ? `<span><i style="background:#fff;border:1px solid #ccc"></i>記録なし ${nodata}</span>` : "")
     : "";
   const bar = played
     ? `<div class="bar">${order.filter((i) => counts[i] > 0).map((i) => `<i style="width:${(counts[i] / all.length) * 100}%;background:${LAMPS[i].color}"></i>`).join("")}</div>`
@@ -547,7 +573,7 @@ function render(state) {
   const missing = played ? all.filter((c) => !c.row) : [];
   const missHTML = missing.length
     ? `<details class="miss"><summary>公式データと照合できなかった譜面 (${missing.length})</summary>
-        <div style="margin-top:6px">難易度表と公式サイトで曲名の表記が違う可能性があります。</div>
+        <div style="margin-top:6px">まだプレイしていない譜面か、難易度表と公式サイトで曲名の表記が違う譜面です。プレイ済みなのにここに出る譜面があれば、曲名の表記違いです。</div>
         <ul>${missing.map((c) => `<li>${esc(c.t)} <span style="color:#7f838d">${c.chart ? CHART_NAME[c.chart] : ""}</span></li>`).join("")}</ul></details>`
     : "";
 
@@ -565,6 +591,7 @@ function render(state) {
           <div class="hero-c">${played ? `${purpose.goalLabel} 達成 <b>${doneN}</b> / ${all.length}（${((doneN / all.length) * 100).toFixed(1)}%）` : "プレイデータ未取得"}</div></div></div>
         ${lampChips ? `<div class="lamps">${lampChips}</div>` : ""}${bar}
         ${played ? "" : `<div style="margin-top:8px;font-size:12.5px;color:#7f838d">☆${lv} のプレイデータがまだありません。下の「データを更新」を押してください。</div>`}
+        ${noRecord ? `<div style="margin-top:8px;font-size:12.5px;color:#7f838d">公式サイトに ☆${lv} のプレイ記録がありません（すべて NO PLAY として表示しています）。</div>` : ""}
       </div>
       ${groupsHTML}
       ${missHTML}
