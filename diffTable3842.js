@@ -353,6 +353,58 @@ padding:calc(8px + env(safe-area-inset-top)) 12px 8px;border-bottom:1px solid va
 .pt-view{display:flex;justify-content:flex-end;gap:4px;margin-top:6px;font-size:12px;color:var(--sub);align-items:center}
 .pt-view button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 8px;font-size:12px;color:var(--sub);font-family:inherit}
 .pt-view button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+/* ---- バナー表示 (デザインA) ---- */
+body.pt{background-color:#fbf5df;background-image:radial-gradient(rgba(228,0,127,.06) 1.5px,transparent 1.6px);background-size:18px 18px}
+.pt-top{background:rgba(251,245,223,.93)}
+.pop{font-family:"Hiragino Maru Gothic ProN","M PLUS Rounded 1c","Hiragino Sans",sans-serif}
+.hero{position:relative;margin:0 -10px;padding:12px 16px 12px;background:linear-gradient(#fff9e6,#fff3cc);border-bottom:3px solid #1d2b53;box-shadow:inset 0 4px 0 #f6c945}
+.hero-row{display:flex;align-items:flex-end;gap:12px}
+.hero-lv{color:#2d7fe0;font-weight:900;line-height:.9;text-shadow:2px 2px 0 #fff,3px 3px 0 rgba(29,43,83,.18)}
+.hero-lv small{display:block;font-size:15px;letter-spacing:.08em}
+.hero-lv b{font-size:58px;letter-spacing:-.02em}
+.hero-txt{flex:1;min-width:0;padding-bottom:4px}
+.hero-title{color:#e4007f;font-weight:900;font-size:19px;letter-spacing:.03em}
+.hero-date{font-size:11px;color:#a16207;margin-top:2px}
+.hero-clear{font-size:13px;color:#1d2b53;font-weight:700;margin-top:4px}
+.hero-clear b{font-size:20px}
+.medals{display:flex;gap:4px;overflow-x:auto;margin:10px -16px 0;padding:0 16px 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.medals::-webkit-scrollbar{display:none}
+.medals span{flex:none;display:flex;align-items:center;gap:2px;background:#fff;border:2px solid #f0dc9c;border-radius:8px;padding:2px 6px 2px 3px;font-weight:800;font-size:13px;color:#1d2b53;font-variant-numeric:tabular-nums}
+.medals img{width:22px;height:22px}
+.medals span.tot{background:#1d2b53;border-color:#1d2b53;color:#fff;padding:2px 8px}
+.hero .pt-bar{margin:8px 0 0;height:8px;border:1px solid rgba(29,43,83,.15)}
+.bn-group{display:flex;gap:6px;margin-top:12px;align-items:flex-start}
+.bn-label{flex:none;width:34px;position:sticky;top:var(--toph,150px);align-self:stretch;border-radius:10px;color:#fff;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px;
+border:2px solid rgba(255,255,255,.9);box-shadow:0 0 0 2px rgba(0,0,0,.08);user-select:none;-webkit-user-select:none}
+.bn-label .vt{writing-mode:vertical-rl;font-weight:900;font-size:17px;letter-spacing:.15em}
+.bn-label small{font-size:10px;font-weight:800;writing-mode:vertical-rl;opacity:.95}
+.bn-grid{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 6px}
+.bn-group.closed .bn-grid{display:block;font-size:12px;color:var(--sub);padding:10px 0}
+.bn-group.closed .bn-grid > *{display:none}
+.bn-group.closed .bn-grid::before{content:"タップで開く"}
+.bn{min-width:0}
+.bn-top{display:flex;gap:3px;align-items:stretch}
+.bn-medal{flex:none;width:30px;border-radius:7px;background:#fff;border:2px solid #cfd8ea;display:flex;align-items:center;justify-content:center}
+.bn-medal img{width:24px;height:24px}
+.bn-banner{flex:1;min-width:0;height:52px;border-radius:6px;position:relative;overflow:hidden;padding:3px 5px;display:flex;flex-direction:column;justify-content:flex-end;
+background:linear-gradient(120deg,hsl(var(--h) 85% 58%),hsl(calc(var(--h) + 40) 80% 42%));box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55),0 1px 2px rgba(0,0,0,.2)}
+.bn-banner::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 85% 20%,rgba(255,255,255,.35) 0 14px,transparent 15px),repeating-linear-gradient(-45deg,rgba(255,255,255,.08) 0 6px,transparent 6px 12px);pointer-events:none}
+.bn-genre{position:absolute;top:2px;left:5px;right:22px;font-size:8.5px;font-weight:800;color:rgba(255,255,255,.92);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 1px rgba(0,0,0,.35)}
+.bn-title{position:relative;z-index:1;font-size:12px;font-weight:900;line-height:1.15;color:#fff;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;
+text-shadow:-1px -1px 0 rgba(0,0,0,.55),1px -1px 0 rgba(0,0,0,.55),-1px 1px 0 rgba(0,0,0,.55),1px 1px 0 rgba(0,0,0,.55)}
+.bn-type{position:absolute;top:2px;right:2px;z-index:1;font-size:8px;font-weight:900;color:#fff;background:#f97316;border-radius:3px;padding:0 3px;line-height:12px;border:1px solid rgba(255,255,255,.8)}
+.bn-type.EX{background:#dc2626}
+.bn-cat{position:absolute;top:13px;right:2px;z-index:1;font-size:8px;font-weight:900;color:#fff;border-radius:3px;padding:0 3px;line-height:12px;border:1px solid rgba(255,255,255,.8)}
+.bn-foot{display:flex;align-items:center;gap:3px;height:20px;padding-left:33px;font-size:11px;font-weight:800;color:#1d2b53;font-variant-numeric:tabular-nums}
+.bn-foot img{height:17px;width:17px}
+.bn-foot .none{color:#9ca3af;font-weight:700;font-size:10.5px}
+.bn-lamp{flex:1;height:4px;border-radius:2px;margin-left:auto;max-width:34px}
+.bn.l-noplay .bn-banner,.bn.l-nodata .bn-banner{filter:saturate(.25) brightness(1.08)}
+.bn.l-nodata .bn-medal{border-style:dashed}
+.bn.l-perfect .bn-medal{border-color:#f5c518;background:#fff8d6}
+.bn.l-fc .bn-medal{border-color:#aab4c3;background:#f3f6fa}
+.bn.l-clear .bn-medal{border-color:#e2a27a;background:#fff3ea}
+.bn.l-easy .bn-medal{border-color:#7fd6a1}.bn.l-orange .bn-medal{border-color:#ffbf73}.bn.l-failed .bn-medal{border-color:#6b7280}
 .pt-empty{font-size:13px;color:var(--sub);padding:6px 4px}
 .pt-foot{margin:22px 10px 0;display:flex;flex-direction:column;gap:8px}
 .pt-btn{border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:700;font-family:inherit;background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
@@ -375,7 +427,9 @@ const LAMP_COLOR = {
 function setupPage() {
   document.head.innerHTML =
     '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">' +
-    "<title>ポップン難易度表 Lv38-42</title>";
+    "<title>ポップン難易度表 Lv38-42</title>" +
+    // iPhoneは標準の丸ゴシック(ヒラギノ丸ゴ)を使う。Android等ではWebフォントの丸ゴシックで代用
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@800;900&display=swap">';
   const st = document.createElement("style");
   st.textContent = CSS;
   document.head.appendChild(st);
@@ -408,6 +462,68 @@ function rowHTML(r, showCat) {
     <div class="pt-main"><div class="pt-name">${esc(r.title)}</div>
       <div class="pt-sub">${cat}${r.type ? `<span class="pt-type ${r.type}">${r.type}</span>` : ""}<span>${esc(r.genre)}</span>${bpm}</div></div>
     <div class="pt-res">${res}</div></div>`;
+}
+
+// 曲名から決まった色相を作る (毎回同じ曲は同じ色になる)
+function hueOf(s) {
+  let h = 0;
+  for (const ch of String(s)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return h % 360;
+}
+
+function tileHTML(r, showCat) {
+  const lamp = lampOf(r);
+  const medal = r.found && r.medal ? `<img src="${BASE_URL}/icon/c_${r.medal}.png" alt="">` : "";
+  let foot;
+  if (!r.found) foot = `<span class="none">データなし</span>`;
+  else if (lamp === "noplay") foot = `<span class="none">未プレイ</span>`;
+  else foot = (r.rank ? `<img src="${BASE_URL}/icon/s_${r.rank}.png" alt="">` : "") + `<span>${r.score.toLocaleString()}</span>`;
+  const lampColor = LAMP_COLOR[lamp] || "transparent";
+  const cat = showCat ? `<span class="bn-cat c-${r.category}">${r.category}</span>` : "";
+  return `<div class="bn l-${lamp}">
+    <div class="bn-top"><div class="bn-medal">${medal}</div>
+      <div class="bn-banner pop" style="--h:${hueOf(r.title)}">
+        <span class="bn-genre">${esc(r.genre)}</span>${r.type ? `<span class="bn-type ${r.type}">${r.type}</span>` : ""}${cat}
+        <span class="bn-title">${esc(r.title)}</span></div></div>
+    <div class="bn-foot">${foot}<i class="bn-lamp" style="background:${lampColor}"></i></div></div>`;
+}
+
+function bannerGroupHTML(key, label, rows, filter, settings, showCat) {
+  const cleared = rows.filter((r) => isCleared(r.medal)).length;
+  const shown = rows.filter((r) => passFilter(r, filter));
+  const closed = settings.collapsed[key] ? " closed" : "";
+  return `<section class="bn-group${closed}" data-key="${esc(key)}">
+    <div class="bn-label c-${label} pop"><span class="vt">${label}</span><small>${cleared}/${rows.length}</small></div>
+    <div class="bn-grid">${shown.length ? shown.map((r) => tileHTML(r, showCat)).join("") : `<div class="pt-empty" style="grid-column:1/-1">該当する曲はありません</div>`}</div>
+  </section>`;
+}
+
+function heroHTML(lv, rows, store) {
+  const has = !!store?.levels?.[lv];
+  const total = rows.length;
+  const cleared = rows.filter((r) => isCleared(r.medal)).length;
+  let strip = "", bar = "";
+  if (has) {
+    const mc = Array(13).fill(0);
+    let noplay = 0;
+    for (const r of rows) {
+      if (r.found && r.medal) mc[r.medal]++;
+      else noplay++;
+    }
+    strip = `<div class="medals">` +
+      [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((m) => `<span><img src="${BASE_URL}/icon/c_${m}.png" alt="">${mc[m]}</span>`).join("") +
+      `<span>未 ${noplay}</span><span class="tot">/ ${total}</span></div>`;
+    const counts = {};
+    for (const r of rows) { const l = lampOf(r); counts[l] = (counts[l] || 0) + 1; }
+    bar = `<div class="pt-bar">` + LAMPS.map((l) => (counts[l.id] ? `<i style="width:${(counts[l.id] / total) * 100}%;background:${LAMP_COLOR[l.id]}"></i>` : "")).join("") + `</div>`;
+  }
+  return `<div class="hero pop">
+    <div class="hero-row">
+      <div class="hero-lv"><small>LEVEL</small><b>${lv}</b></div>
+      <div class="hero-txt"><div class="hero-title">pop'n music 難易度表</div>
+        <div class="hero-date">データ取得 ${esc(formatDate(store?.timestamps?.[lv]))}</div>
+        <div class="hero-clear">${has ? `クリア <b>${cleared}</b> / ${total}（${total ? ((cleared / total) * 100).toFixed(1) : "0.0"}%）` : "プレイデータ未取得"}</div></div>
+    </div>${strip}${bar}</div>`;
 }
 
 function passFilter(r, filter) {
@@ -459,12 +575,14 @@ function render(state) {
   normal.sort(byDifficulty);
   soflan.sort(byDifficulty);
 
+  const view = settings.view || "banner";
+  const gfn = view === "banner" ? bannerGroupHTML : groupHTML;
   let groups = "";
   for (const c of CATEGORIES) {
     const g = normal.filter((r) => r.category === c);
-    if (g.length) groups += groupHTML(`${lv}-${c}`, c, g, settings.filter, settings, false);
+    if (g.length) groups += gfn(`${lv}-${c}`, c, g, settings.filter, settings, false);
   }
-  if (soflan.length) groups += groupHTML(`${lv}-ソフラン`, "ソフラン", soflan, settings.filter, settings, true);
+  if (soflan.length) groups += gfn(`${lv}-ソフラン`, "ソフラン", soflan, settings.filter, settings, true);
 
   const missing = rows.filter((r) => !r.found);
   const missHTML = store?.levels?.[lv] && missing.length
@@ -476,20 +594,21 @@ function render(state) {
   const f = settings.filter;
   document.body.innerHTML = `
     <div class="pt-top">
-      <div class="pt-title"><span><b>pop'n</b> クリア難易度表</span><span>${esc(formatDate(store?.timestamps?.[lv]))}</span></div>
-      <div class="pt-tabs">${LEVELS.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">Lv${l}</button>`).join("")}</div>
+      <div class="pt-tabs" style="margin-top:0">${LEVELS.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">Lv${l}</button>`).join("")}</div>
       <div class="pt-filter">
         <button data-f="all" class="${f === "all" ? "on" : ""}">すべて</button>
         <button data-f="notclear" class="${f === "notclear" ? "on" : ""}">未クリアのみ</button>
         <button data-f="noplay" class="${f === "noplay" ? "on" : ""}">未プレイのみ</button>
       </div>
       <div class="pt-view">表示
-        <button data-v="list" class="${settings.view !== "compact" ? "on" : ""}">詳細</button>
-        <button data-v="compact" class="${settings.view === "compact" ? "on" : ""}">コンパクト</button>
+        <button data-v="banner" class="${view === "banner" ? "on" : ""}">バナー</button>
+        <button data-v="list" class="${view === "list" ? "on" : ""}">詳細</button>
+        <button data-v="compact" class="${view === "compact" ? "on" : ""}">コンパクト</button>
       </div>
     </div>
-    <div class="pt-wrap${settings.view === "compact" ? " compact" : ""}">
-      ${store?.levels?.[lv] ? summaryHTML(rows) : `<div class="pt-sum">Lv${lv} のプレイデータがまだありません。下の「このLvを更新」を押してください。</div>`}
+    <div class="pt-wrap${view === "compact" ? " compact" : ""}" style="padding-top:0">
+      ${heroHTML(lv, rows, store)}
+      ${store?.levels?.[lv] ? "" : `<div class="pt-sum" style="margin-top:10px">Lv${lv} のプレイデータがまだありません。下の「データを更新」を押してください。</div>`}
       ${groups}
       ${missHTML}
     </div>
@@ -521,7 +640,10 @@ function render(state) {
       render(state);
     })
   );
-  document.querySelectorAll(".pt-gh").forEach((h) =>
+  // 縦ラベルを固定表示する位置 = 上部の固定バーの高さ
+  const top = document.querySelector(".pt-top");
+  if (top) document.body.style.setProperty("--toph", top.offsetHeight + 6 + "px");
+  document.querySelectorAll(".pt-gh, .bn-label").forEach((h) =>
     h.addEventListener("click", () => {
       const sec = h.parentElement;
       const key = sec.dataset.key;
