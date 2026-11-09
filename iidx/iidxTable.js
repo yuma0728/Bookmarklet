@@ -490,6 +490,30 @@ button{font-family:inherit}
 .glabel small{font-size:9.5px;font-weight:800;writing-mode:vertical-rl;opacity:.95}
 .glabel.kojin{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 5px,transparent 5px 10px)}
 .cells{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+/* 曲名検索 */
+.srch-btn{flex:none;border:0;background:var(--ink);color:#fff;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800}
+.srch{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+.srch-bar{display:flex;gap:8px;padding:10px;border-bottom:1px solid var(--line);background:#fff}
+.srch-bar input{flex:1;min-width:0;font-size:16px;padding:9px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);outline:none;font-family:inherit}
+.srch-bar input:focus{border-color:var(--accent)}
+.srch-close{flex:none;border:0;background:#e3e1dc;border-radius:10px;padding:0 14px;font-size:14px;font-weight:800;color:var(--ink)}
+.srch-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 10px calc(24px + env(safe-area-inset-bottom))}
+.sr{display:flex;align-items:center;gap:9px;background:#fff;border-radius:10px;padding:7px 10px 7px 0;margin-bottom:6px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05);cursor:pointer}
+.sr:active{background:#f6f4f0}
+.sr-lamp{flex:none;width:5px;align-self:stretch}
+.sr-main{flex:1;min-width:0}
+.sr-t{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sr-s{display:flex;gap:5px;align-items:center;font-size:11px;color:var(--sub);margin-top:3px;flex-wrap:wrap}
+.sr-s .ch{font-size:9px;font-weight:900;color:#fff;border-radius:3px;padding:0 3px;line-height:13px}
+.sr-lv{font-size:12.5px;color:var(--ink);font-weight:900}
+.sr-rk{font-weight:800;color:var(--ink);background:var(--bg);border-radius:5px;padding:0 5px;line-height:17px}
+.sr-rk small{font-size:9px;color:var(--sub);margin-right:3px;font-weight:700}
+.sr-r{flex:none;display:flex;flex-direction:column;align-items:flex-end;font-size:10.5px;color:var(--sub);font-weight:700;font-variant-numeric:tabular-nums}
+.sr-r b{font-size:11px}
+.srch-hint{font-size:12.5px;color:var(--sub);padding:16px 6px;text-align:center;line-height:1.6}
+body.noscroll{overflow:hidden}
+.hl{animation:hl 2.4s ease}
+@keyframes hl{0%,55%{box-shadow:0 0 0 3px var(--accent),0 0 14px rgba(61,111,224,.6)}100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}
 /* 閉じている枠のまとめカード */
 .card{flex:1;min-width:0;background:#fff;border-radius:12px;padding:9px 11px;box-shadow:0 1px 3px rgba(0,0,0,.07);cursor:pointer;display:flex;flex-direction:column;gap:6px}
 .card:active{transform:scale(.99)}
@@ -575,10 +599,118 @@ function cellHTML(c, goal) {
   const info = r
     ? `${r.dj ? `<span>${r.dj}</span>` : ""}${r.score ? `<span>${r.score}</span>` : ""}`
     : `<span>未取得</span>`;
-  return `<div class="cell l${lamp}${r ? "" : " nd"}${done ? " done" : ""}" style="--lc:${L.color};--lbg:${L.bg}">
+  return `<div class="cell l${lamp}${r ? "" : " nd"}${done ? " done" : ""}" data-id="${esc(c.chart + "|" + c.t)}" style="--lc:${L.color};--lbg:${L.bg}">
     <div class="lb"></div>
     <div class="ct"><div class="t">${esc(c.t)}</div>
       <div class="s">${c.chart ? `<span class="ch ch-${c.chart}">${c.chart}</span>` : ""}${c.option ? `<span class="op">※</span>` : ""}${info}<span class="lp">${r ? L.short : ""}</span></div></div></div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* 曲名検索 (文字を打つたびに候補を表示)                                   */
+/* ------------------------------------------------------------------ */
+
+// 検索用に文字をそろえる: 全角/半角・大文字/小文字・カタカナ/ひらがな の違いと、空白や記号を無視する
+function skey(s) {
+  return String(s ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/[\s'"’‘“”・･\-‐－―~～〜!?.,、。:;()\[\]「」『』☆★♪♥♡*#&/\\]/g, "");
+}
+// 全ての表 (☆9～12 / NORMAL以下・HARD・EX HARD) の譜面を、譜面ごとに1件にまとめる
+function searchIndex(state) {
+  if (state.sIdx && state.sIdxStore === state.store) return state.sIdx;
+  const map = new Map();
+  const idxByLv = {};
+  for (const t of state.data.tables) {
+    const played = state.store?.levels?.[t.level];
+    const none = !!state.store?.none?.[t.level];
+    if (!idxByLv[t.level]) idxByLv[t.level] = makeIndex(played);
+    for (const g of t.groups) {
+      for (const [title, chart] of g.charts) {
+        const key = `${t.level}|${chart}|${norm(title)}`;
+        let e = map.get(key);
+        if (!e) {
+          const row = none ? { lamp: 0, dj: "", score: 0 } : played ? findRow(idxByLv[t.level], title, chart) || { lamp: 0, dj: "", score: 0 } : null;
+          e = { t: title, chart, level: t.level, row, k: skey(title), ranks: [] };
+          map.set(key, e);
+        }
+        e.ranks.push({ purpose: t.purpose, name: g.name, kojin: g.kojin });
+      }
+    }
+  }
+  state.sIdx = [...map.values()];
+  state.sIdxStore = state.store;
+  return state.sIdx;
+}
+function searchResultHTML(e, i) {
+  const L = LAMPS[e.row ? e.row.lamp : 0];
+  const ranks = PURPOSES.map((p) => {
+    const r = e.ranks.find((x) => x.purpose === p.id);
+    return r ? `<span class="sr-rk"><small>${p.label}</small>${r.kojin ? "個人差" : ""}${esc(r.name)}</span>` : "";
+  }).join("");
+  return `<div class="sr" data-go="${i}">
+    <i class="sr-lamp" style="background:${e.row && e.row.lamp === 7 ? "linear-gradient(#ff5e7e,#ffb347,#f9f871,#5ee28b,#4fb6ff,#a77bff)" : L.color}"></i>
+    <div class="sr-main"><div class="sr-t">${esc(e.t)}</div>
+      <div class="sr-s"><b class="sr-lv">☆${e.level}</b>${e.chart ? `<span class="ch ch-${e.chart}">${e.chart}</span>` : ""}${ranks}</div></div>
+    <div class="sr-r"><b style="color:${e.row && e.row.lamp ? L.color : "#a5a29b"}">${e.row ? L.short : "未取得"}</b>${e.row && e.row.score ? `<span>${e.row.dj} ${e.row.score}</span>` : ""}</div></div>`;
+}
+function openSearch(state) {
+  const idx = searchIndex(state);
+  const box = document.createElement("div");
+  box.className = "srch";
+  box.innerHTML = `<div class="srch-bar"><input type="search" placeholder="曲名を入力" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"><button class="srch-close">閉じる</button></div>
+    <div class="srch-list"></div>`;
+  document.body.appendChild(box);
+  document.body.classList.add("noscroll");
+  const input = box.querySelector("input");
+  const list = box.querySelector(".srch-list");
+  const close = () => { box.remove(); document.body.classList.remove("noscroll"); };
+  let shown = [];
+  const update = () => {
+    const q = skey(input.value);
+    state.lastQuery = input.value;
+    if (!q) { list.innerHTML = `<div class="srch-hint">曲名を入力すると、☆9～12の全ての表から候補が出ます。<br>（ひらがな・カタカナは区別しません）</div>`; return; }
+    // 曲名の先頭が一致 → 曲名の途中に含む の順。同じ順位なら☆の低い順
+    const hits = [];
+    for (const e of idx) {
+      const s = e.k.startsWith(q) ? 0 : e.k.includes(q) ? 1 : -1;
+      if (s >= 0) hits.push([s, e]);
+    }
+    hits.sort((a, b) => a[0] - b[0] || a[1].level - b[1].level || a[1].t.localeCompare(b[1].t));
+    shown = hits.slice(0, 60).map((h) => h[1]);
+    list.innerHTML = shown.length
+      ? shown.map((e, i) => searchResultHTML(e, i)).join("") + (hits.length > 60 ? `<div class="srch-hint">ほか ${hits.length - 60} 件。もう少し文字を入力してください。</div>` : "")
+      : `<div class="srch-hint">見つかりませんでした</div>`;
+  };
+  input.value = state.lastQuery || "";
+  input.addEventListener("input", update);
+  box.querySelector(".srch-close").addEventListener("click", close);
+  // 候補を押すと、その譜面の☆と表を開いて譜面の場所まで移動する (今見ている目的の表に載っていればその表を優先)
+  list.addEventListener("click", (ev) => {
+    const item = ev.target.closest("[data-go]");
+    if (!item) return;
+    const e = shown[+item.dataset.go];
+    if (!e) return;
+    const s = state.settings;
+    const rank = e.ranks.find((r) => r.purpose === s.purpose) || e.ranks[0];
+    s.level = e.level;
+    s.purpose = rank.purpose;
+    s.filter = "all";
+    s.opened = s.opened || {};
+    s.opened[`${rank.purpose}-${e.level}-${rank.kojin ? "k" : ""}${rank.name}`] = true;
+    saveSettings(s);
+    close();
+    render(state);
+    const el = Array.from(document.querySelectorAll(".cell[data-id]")).find((c) => c.dataset.id === `${e.chart}|${e.t}`);
+    if (el) {
+      const top = document.querySelector(".top");
+      window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - (top ? top.offsetHeight : 0) - 40);
+      el.classList.add("hl");
+    }
+  });
+  update();
+  input.focus();
 }
 
 function passFilter(c, filter, goal) {
@@ -702,7 +834,7 @@ function render(state) {
 
   document.body.innerHTML = `
     <div class="top">
-      <div class="head"><b>beatmania IIDX 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]))}</span></div>
+      <div class="head"><b>beatmania IIDX 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]))}</span><button class="srch-btn" data-search="1">🔍 検索</button></div>
       <div class="seg lv" style="grid-template-columns:repeat(${levels.length},1fr)">${levels.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">☆${l}</button>`).join("")}</div>
       <div class="seg" style="grid-template-columns:repeat(${PURPOSES.length},1fr)">${PURPOSES.map((p) => {
         const ok = available.includes(p);
@@ -714,7 +846,7 @@ function render(state) {
       <div class="hero"><div class="hero-row">
         <div class="hero-lv"><div><small>☆</small><b>${lv}</b></div><div class="hero-p">${purpose.label}</div></div>
         <div class="hero-txt">
-          <div class="hero-c">${played ? `${purpose.goalLabel} 達成 <b>${doneN}</b> / ${all.length}（${((doneN / all.length) * 100).toFixed(1)}%）` : "プレイデータ未取得"}</div></div></div>
+          <div class="hero-c">${played ? `達成 <b>${doneN}</b> / ${all.length}（${((doneN / all.length) * 100).toFixed(1)}%）` : "プレイデータ未取得"}</div></div></div>
         ${lampChips ? `<div class="lamps">${lampChips}</div>` : ""}${bar}
         ${played ? "" : `<div style="margin-top:8px;font-size:12.5px;color:#7f838d">☆${lv} のプレイデータがまだありません。下の「データを更新」を押してください。</div>`}
         ${noRecord ? `<div style="margin-top:8px;font-size:12.5px;color:#7f838d">公式サイトに ☆${lv} のプレイ記録がありません（すべて NO PLAY として表示しています）。</div>` : ""}
@@ -755,6 +887,7 @@ function render(state) {
     document.querySelectorAll("section[data-key]").forEach((s) => { settings.opened[s.dataset.key] = b.dataset.all === "open"; });
     rerender();
   }));
+  document.querySelector("[data-search]").addEventListener("click", () => openSearch(state));
   document.querySelector('[data-act="lv"]').addEventListener("click", () => runUpdate(state, [lv]));
   document.querySelector('[data-act="all"]').addEventListener("click", () => runUpdate(state, state.allLevels));
 }
