@@ -492,6 +492,29 @@ body.pt{background:var(--bg);background-image:none}
 .pt-top .medals img{width:19px;height:19px}
 .pt-top .hero .pt-bar{margin-top:5px;height:5px}
 .pt-wrap > .bn-group:first-of-type,.pt-wrap > .pt-group:first-of-type{margin-top:10px}
+/* 曲名検索 */
+.srch-btn{flex:none;border:0;background:var(--ink);color:#fff;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;font-family:inherit}
+.srch{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+.srch-bar{display:flex;gap:8px;padding:10px;border-bottom:1px solid var(--line);background:#fff}
+.srch-bar input{flex:1;min-width:0;font-size:16px;padding:9px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);font-family:inherit;color:var(--ink);outline:none}
+.srch-bar input:focus{border-color:var(--accent)}
+.srch-close{flex:none;border:0;background:#e6e3dd;border-radius:10px;padding:0 14px;font-size:14px;font-weight:800;color:var(--ink);font-family:inherit}
+.srch-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 10px calc(24px + env(safe-area-inset-bottom))}
+.sr{display:flex;align-items:center;gap:9px;background:#fff;border-radius:10px;padding:7px 10px 7px 0;margin-bottom:6px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05);cursor:pointer}
+.sr:active{background:#f6f4f0}
+.sr-lamp{flex:none;width:5px;align-self:stretch}
+.sr-main{flex:1;min-width:0}
+.sr-t{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sr-s{display:flex;gap:4px;align-items:center;font-size:11px;color:var(--sub);margin-top:3px;white-space:nowrap;overflow:hidden}
+.sr-lv{font-size:12.5px;color:var(--ink);font-weight:900}
+.sr-sof{font-size:10px;font-weight:900;color:#fff;background:#3a3f52;border-radius:4px;padding:0 4px;line-height:15px}
+.sr-g{overflow:hidden;text-overflow:ellipsis}
+.sr-r{flex:none;display:flex;flex-direction:column;align-items:flex-end;font-size:11px;color:var(--sub);font-weight:700;font-variant-numeric:tabular-nums}
+.sr-r img{width:26px;height:26px}
+.srch-hint{font-size:12.5px;color:var(--sub);padding:16px 6px;text-align:center;line-height:1.6}
+body.noscroll{overflow:hidden}
+.hl{animation:hl 2.4s ease}
+@keyframes hl{0%,55%{box-shadow:0 0 0 3px var(--accent),0 0 14px rgba(239,91,124,.6)}100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}
 /* 閉じている枠のまとめカード */
 .card{flex:1;min-width:0;background:#fff;border-radius:12px;padding:9px 11px;box-shadow:0 1px 3px rgba(38,43,58,.08);cursor:pointer;display:flex;flex-direction:column;gap:6px}
 .card:active{transform:scale(.99)}
@@ -565,7 +588,7 @@ function rowHTML(r, showCat) {
   }
   const cat = showCat ? `<span class="pt-cat c-${r.category}">${r.category}</span>` : "";
   const bpm = r.soflan ? `<span>BPM ${esc(r.bpm)}</span>` : "";
-  return `<div class="pt-row l-${lamp}">
+  return `<div class="pt-row l-${lamp}" data-id="${r.lv}-${r.index}">
     <div class="pt-lamp"></div>
     <div class="pt-main"><div class="pt-name">${esc(r.title)}</div>
       <div class="pt-sub">${cat}${r.type ? `<span class="pt-type ${r.type}">${r.type}</span>` : ""}<span>${esc(r.genre)}</span>${bpm}</div></div>
@@ -609,12 +632,100 @@ function tileHTML(r, showCat) {
   else foot = (r.rank ? `<img src="${BASE_URL}/icon/s_${r.rank}.png" alt="">` : "") + `<span>${r.score.toLocaleString()}</span>`;
   const lampColor = LAMP_COLOR[lamp] || "transparent";
   const cat = showCat ? `<span class="bn-cat c-${r.category}">${r.category}</span>` : "";
-  return `<div class="bn l-${lamp}">
+  return `<div class="bn l-${lamp}" data-id="${r.lv}-${r.index}">
     <div class="bn-top"><div class="bn-medal">${medal}</div>
       <div class="bn-banner pop" style="${bannerStyle(r.title)}">
         <span class="bn-genre">${esc(r.genre)}</span>${r.type ? `<span class="bn-type ${r.type}">${r.type}</span>` : ""}${cat}
         <span class="bn-title">${esc(r.title)}</span></div></div>
     <div class="bn-foot">${foot}<i class="bn-lamp" style="background:${lampColor}"></i></div></div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* 曲名検索 (文字を打つたびに候補を表示)                                   */
+/* ------------------------------------------------------------------ */
+
+// 検索用に文字をそろえる: 全角/半角・大文字/小文字・カタカナ/ひらがな の違いと、空白や記号を無視する
+function skey(s) {
+  return String(s ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/[\s'"’‘“”・･\-‐－―~～〜!?.,、。:;()\[\]「」『』☆★♪♥♡*#&/\\]/g, "");
+}
+// 全Lvの曲を1つの一覧にまとめる (プレイデータが変わったら作り直す)
+function searchIndex(state) {
+  if (state.sIdx && state.sIdxStore === state.store) return state.sIdx;
+  const out = [];
+  for (const lv of LEVELS) {
+    for (const r of matchLevel(state.table[lv] || [], state.store?.levels?.[lv])) out.push({ r, k: skey(r.title), g: skey(r.genre) });
+  }
+  state.sIdx = out;
+  state.sIdxStore = state.store;
+  return out;
+}
+function searchResultHTML(r) {
+  const lamp = lampOf(r);
+  const color = LAMP_COLOR[lamp] || "#e5e7eb";
+  const medal = r.found && r.medal ? `<img src="${BASE_URL}/icon/c_${r.medal}.png" alt="">` : "";
+  const res = !r.found ? "データなし" : lamp === "noplay" ? "未プレイ" : r.score.toLocaleString();
+  return `<div class="sr" data-go="${r.lv}-${r.index}">
+    <i class="sr-lamp" style="background:${color}"></i>
+    <div class="sr-main"><div class="sr-t">${esc(r.title)}</div>
+      <div class="sr-s"><b class="sr-lv">Lv${r.lv}</b><span class="pt-cat c-${r.category}">${r.category}</span>${r.soflan ? `<span class="sr-sof">ソフラン</span>` : ""}${r.type ? `<span class="pt-type ${r.type}">${r.type}</span>` : ""}<span class="sr-g">${esc(r.genre)}</span></div></div>
+    <div class="sr-r">${medal}<div>${res}</div></div></div>`;
+}
+function openSearch(state) {
+  const idx = searchIndex(state);
+  const box = document.createElement("div");
+  box.className = "srch";
+  box.innerHTML = `<div class="srch-bar"><input type="search" placeholder="曲名・ジャンル名を入力" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"><button class="srch-close">閉じる</button></div>
+    <div class="srch-list"></div>`;
+  document.body.appendChild(box);
+  document.body.classList.add("noscroll");
+  const input = box.querySelector("input");
+  const list = box.querySelector(".srch-list");
+  const close = () => { box.remove(); document.body.classList.remove("noscroll"); };
+  const update = () => {
+    const q = skey(input.value);
+    state.lastQuery = input.value;
+    if (!q) { list.innerHTML = `<div class="srch-hint">曲名を入力すると、Lv36～45の全曲から候補が出ます。<br>（ひらがな・カタカナは区別しません）</div>`; return; }
+    // 曲名の先頭が一致 → 曲名の途中に含む → ジャンル名に含む の順に並べる
+    const hits = [];
+    for (const e of idx) {
+      const s = e.k.startsWith(q) ? 0 : e.k.includes(q) ? 1 : e.g.includes(q) ? 2 : -1;
+      if (s >= 0) hits.push([s, e.r]);
+    }
+    hits.sort((a, b) => a[0] - b[0] || a[1].lv - b[1].lv || a[1].index - b[1].index);
+    list.innerHTML = hits.length
+      ? hits.slice(0, 60).map(([, r]) => searchResultHTML(r)).join("") + (hits.length > 60 ? `<div class="srch-hint">ほか ${hits.length - 60} 件。もう少し文字を入力してください。</div>` : "")
+      : `<div class="srch-hint">見つかりませんでした</div>`;
+  };
+  input.value = state.lastQuery || "";
+  input.addEventListener("input", update);
+  box.querySelector(".srch-close").addEventListener("click", close);
+  // 候補を押すと、その曲のLvを開いて曲の場所まで移動する
+  list.addEventListener("click", (ev) => {
+    const item = ev.target.closest("[data-go]");
+    if (!item) return;
+    const e = idx.find((x) => `${x.r.lv}-${x.r.index}` === item.dataset.go);
+    if (!e) return;
+    const r = e.r;
+    state.settings.lv = r.lv;
+    state.settings.filter = "all";
+    state.settings.opened = state.settings.opened || {};
+    state.settings.opened[r.soflan ? `${r.lv}-ソフラン` : `${r.lv}-${r.category}`] = true;
+    saveSettings(state.settings);
+    close();
+    render(state);
+    const el = document.querySelector(`[data-id="${r.lv}-${r.index}"]`);
+    if (el) {
+      const top = document.querySelector(".pt-top");
+      window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - (top ? top.offsetHeight : 0) - 40);
+      el.classList.add("hl");
+    }
+  });
+  update();
+  input.focus();
 }
 
 function keepInView(key) {
@@ -765,7 +876,7 @@ function render(state) {
   const f = settings.filter;
   document.body.innerHTML = `
     <div class="pt-top">
-      <div class="pt-head pop"><b>pop'n music 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]).replace(/^\d{4}\//, ""))}</span></div>
+      <div class="pt-head pop"><b>pop'n music 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]).replace(/^\d{4}\//, ""))}</span><button class="srch-btn" data-search="1">🔍 検索</button></div>
       <div class="pt-tabs">${LEVELS.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">${l}</button>`).join("")}</div>
       <div class="pt-filter">
         ${[["all", "すべて"], ["cleared", "クリア済み"], ["notclear", "未クリア"], ["noplay", "未プレイ"]]
@@ -847,6 +958,7 @@ function render(state) {
       render(state);
     })
   );
+  document.querySelector("[data-search]").addEventListener("click", () => openSearch(state));
   document.querySelector('[data-act="update-lv"]').addEventListener("click", () => runUpdate(state, [lv]));
   document.querySelector('[data-act="update-all"]').addEventListener("click", () => runUpdate(state, LEVELS));
 }
