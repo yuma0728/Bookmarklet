@@ -493,6 +493,9 @@ body.pt{background:var(--bg);background-image:none}
 .pt-top .hero .pt-bar{margin-top:5px;height:5px}
 .pt-wrap > .bn-group:first-of-type,.pt-wrap > .pt-group:first-of-type{margin-top:10px}
 /* 曲名検索 */
+.srch-field{display:flex;align-items:center;gap:8px;width:100%;margin-top:10px;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--sub);text-align:left;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.srch-field .ic{font-size:14px}
+.srch-field .ph{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .srch-btn{flex:none;border:0;background:var(--ink);color:#fff;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;font-family:inherit}
 .srch{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
 .srch-bar{display:flex;gap:8px;padding:10px;border-bottom:1px solid var(--line);background:#fff}
@@ -684,7 +687,12 @@ function openSearch(state) {
   document.body.classList.add("noscroll");
   const input = box.querySelector("input");
   const list = box.querySelector(".srch-list");
-  const close = () => { box.remove(); document.body.classList.remove("noscroll"); };
+  const close = () => {
+    box.remove();
+    document.body.classList.remove("noscroll");
+    const ph = document.querySelector(".srch-field .ph");
+    if (ph) ph.textContent = state.lastQuery || "曲名・ジャンル名で検索（全Lv）";
+  };
   const update = () => {
     const q = skey(input.value);
     state.lastQuery = input.value;
@@ -876,7 +884,7 @@ function render(state) {
   const f = settings.filter;
   document.body.innerHTML = `
     <div class="pt-top">
-      <div class="pt-head pop"><b>pop'n music 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]).replace(/^\d{4}\//, ""))}</span><button class="srch-btn" data-search="1">🔍 検索</button></div>
+      <div class="pt-head pop"><b>pop'n music 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]).replace(/^\d{4}\//, ""))}</span></div>
       <div class="pt-tabs">${LEVELS.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">${l}</button>`).join("")}</div>
       <div class="pt-filter">
         ${[["all", "すべて"], ["cleared", "クリア済み"], ["notclear", "未クリア"], ["noplay", "未プレイ"]]
@@ -896,6 +904,7 @@ function render(state) {
     </div>
     <div class="pt-wrap${view === "compact" ? " compact" : ""}" style="padding-top:0">
       ${store?.levels?.[lv] ? "" : `<div class="pt-sum" style="margin-top:10px">Lv${lv} のプレイデータがまだありません。下の「データを更新」を押してください。</div>`}
+      <button class="srch-field" data-search="1"><span class="ic">🔍</span><span class="ph">${state.lastQuery ? esc(state.lastQuery) : "曲名・ジャンル名で検索（全Lv）"}</span></button>
       <div class="allbar"><button data-all="open">すべて開く</button><button data-all="close">すべて閉じる</button></div>
       ${groups}
       ${missHTML}
