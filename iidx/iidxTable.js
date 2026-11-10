@@ -491,6 +491,9 @@ button{font-family:inherit}
 .glabel.kojin{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 5px,transparent 5px 10px)}
 .cells{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:5px}
 /* 曲名検索 */
+.srch-field{display:flex;align-items:center;gap:8px;width:100%;margin-top:10px;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;font-size:14px;color:var(--sub);text-align:left;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.srch-field .ic{font-size:14px}
+.srch-field .ph{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .srch-btn{flex:none;border:0;background:var(--ink);color:#fff;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800}
 .srch{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
 .srch-bar{display:flex;gap:8px;padding:10px;border-bottom:1px solid var(--line);background:#fff}
@@ -665,7 +668,12 @@ function openSearch(state) {
   document.body.classList.add("noscroll");
   const input = box.querySelector("input");
   const list = box.querySelector(".srch-list");
-  const close = () => { box.remove(); document.body.classList.remove("noscroll"); };
+  const close = () => {
+    box.remove();
+    document.body.classList.remove("noscroll");
+    const ph = document.querySelector(".srch-field .ph");
+    if (ph) ph.textContent = state.lastQuery || "曲名で検索（☆9～12の全ての表）";
+  };
   let shown = [];
   const update = () => {
     const q = skey(input.value);
@@ -834,7 +842,7 @@ function render(state) {
 
   document.body.innerHTML = `
     <div class="top">
-      <div class="head"><b>beatmania IIDX 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]))}</span><button class="srch-btn" data-search="1">🔍 検索</button></div>
+      <div class="head"><b>beatmania IIDX 難易度表</b><span>取得 ${esc(formatDate(store?.timestamps?.[lv]))}</span></div>
       <div class="seg lv" style="grid-template-columns:repeat(${levels.length},1fr)">${levels.map((l) => `<button data-lv="${l}" class="${l === lv ? "on" : ""}">☆${l}</button>`).join("")}</div>
       <div class="seg" style="grid-template-columns:repeat(${PURPOSES.length},1fr)">${PURPOSES.map((p) => {
         const ok = available.includes(p);
@@ -853,6 +861,7 @@ function render(state) {
       </div>
     </div>
     <div class="wrap">
+      <button class="srch-field" data-search="1"><span class="ic">🔍</span><span class="ph">${state.lastQuery ? esc(state.lastQuery) : "曲名で検索（☆9～12の全ての表）"}</span></button>
       <div class="allbar"><button data-all="open">すべて開く</button><button data-all="close">すべて閉じる</button></div>
       ${groupsHTML}
       ${missHTML}
